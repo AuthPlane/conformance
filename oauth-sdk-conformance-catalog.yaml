@@ -1,0 +1,2269 @@
+---
+schema_version: "1.0"
+catalog_id: "oauth-sdk-conformance-catalog"
+catalog_version: "2026-04-22"
+
+source_baseline:
+  intent: "Language-neutral OAuth SDK conformance catalog shared across SDK implementations."
+
+standards_in_scope:
+  - id: "RFC6749"
+    title: "OAuth 2.0 Authorization Framework"
+    status: "published"
+    used_for:
+      - "token endpoint request and error semantics"
+      - "HTTP Basic client authentication"
+      - "client_credentials grant"
+  - id: "RFC7009"
+    title: "OAuth 2.0 Token Revocation"
+    status: "published"
+    used_for:
+      - "revocation endpoint behavior"
+  - id: "RFC7662"
+    title: "OAuth 2.0 Token Introspection"
+    status: "published"
+    used_for:
+      - "introspection endpoint requests and response parsing"
+      - "introspection-backed revocation checks"
+  - id: "RFC8414"
+    title: "OAuth 2.0 Authorization Server Metadata"
+    status: "published"
+    used_for:
+      - "authorization server discovery"
+      - "issuer and endpoint trust validation"
+  - id: "RFC8693"
+    title: "OAuth 2.0 Token Exchange"
+    status: "published"
+    used_for:
+      - "token exchange request and response semantics"
+  - id: "RFC8707"
+    title: "Resource Indicators for OAuth 2.0"
+    status: "published"
+    used_for:
+      - "resource parameter support"
+      - "audience and resource matching"
+  - id: "RFC9068"
+    title: "JSON Web Token (JWT) Profile for OAuth 2.0 Access Tokens"
+    status: "published"
+    used_for:
+      - "JWT access token validation"
+  - id: "RFC9449"
+    title: "OAuth 2.0 Demonstrating Proof-of-Possession at the Application Layer (DPoP)"
+    status: "published"
+    used_for:
+      - "outbound proof generation"
+      - "nonce retry"
+      - "inbound DPoP-bound token validation"
+  - id: "RFC9110"
+    title: "HTTP Semantics"
+    status: "published"
+    used_for:
+      - "case-insensitive HTTP header field handling"
+  - id: "RFC9728"
+    title: "OAuth 2.0 Protected Resource Metadata"
+    status: "published"
+    used_for:
+      - "protected resource metadata generation"
+  - id: "RFC8725"
+    title: "JSON Web Token Best Current Practices"
+    status: "bcp"
+    used_for:
+      - "JWT hardening"
+      - "algorithm and key-selection discipline"
+  - id: "RFC6750"
+    title: "OAuth 2.0 Bearer Token Usage"
+    status: "published"
+    used_for:
+      - "bearer method value semantics in Protected Resource Metadata"
+      - "WWW-Authenticate challenge attributes and error codes"
+  - id: "RFC7519"
+    title: "JSON Web Token (JWT)"
+    status: "published"
+    used_for:
+      - "core JWT claims semantics (iss, sub, aud, exp, nbf, iat, jti)"
+      - "public and private claim name rules enabling private/extension claims"
+  - id: "RFC3986"
+    title: "Uniform Resource Identifier (URI): Generic Syntax"
+    status: "published"
+    used_for:
+      - "URI syntax-based and scheme-based normalization for htu comparison"
+  - id: "RFC7515"
+    title: "JSON Web Signature (JWS)"
+    status: "published"
+    used_for:
+      - "JOSE header alg requirement for JWT signature verification"
+  - id: "RFC7517"
+    title: "JSON Web Key (JWK)"
+    status: "published"
+    used_for:
+      - "JWK use, key_ops, and alg parameters for key selection"
+
+case_fields:
+  required:
+    - "id"
+    - "title"
+    - "standard_refs"
+    - "surface"
+    - "priority"
+    - "requirement_summary"
+    - "setup"
+    - "stimulus"
+    - "expected"
+    - "rationale"
+
+cases:
+  - id: "rfc8414-metadata-issuer-must-match-configured-issuer"
+    title: "Reject AS metadata whose issuer does not exactly match the configured issuer"
+    standard_refs:
+      - "RFC8414"
+    surface: "sdk-client.discovery"
+    priority: "critical"
+    requirement_summary: "Discovery metadata MUST NOT be trusted if the metadata issuer does not match the configured issuer."
+    setup:
+      configured_issuer: "https://auth.example.com"
+      metadata_document:
+        issuer: "https://evil.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+    stimulus:
+      operation: "client.create"
+    expected:
+      outcome: "reject"
+      error_category: "metadata_fetch_error"
+      error_hint: "issuer mismatch"
+    rationale: "Prevents metadata poisoning and trust-boundary failures."
+  - id: "rfc8414-jwks-uri-required-for-jwt-validation"
+    title: "Reject metadata that omits jwks_uri when JWT verification depends on discovery"
+    standard_refs:
+      - "RFC8414"
+      - "RFC9068"
+    surface: "sdk-client.discovery"
+    priority: "critical"
+    requirement_summary: "A JWT-verifying SDK that relies on discovery MUST require a discoverable JWKS URI."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+    stimulus:
+      operation: "client.create or metadata.get_jwks_uri"
+    expected:
+      outcome: "reject"
+      error_category: "missing_metadata_endpoint"
+      error_hint: "jwks_uri"
+    rationale: "JWT validation cannot proceed safely without a trusted JWKS source."
+  - id: "rfc8414-metadata-must-contain-issuer"
+    title: "Reject AS metadata that omits the issuer field"
+    standard_refs:
+      - "RFC8414"
+    surface: "sdk-client.discovery"
+    priority: "critical"
+    requirement_summary: "Authorization server metadata MUST contain a non-empty issuer."
+    setup:
+      metadata_document:
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+    stimulus:
+      operation: "client.create or metadata.get"
+    expected:
+      outcome: "reject"
+      error_category: "metadata_fetch_error"
+      error_hint: "issuer"
+    rationale: "Issuer is the primary trust anchor for discovery."
+  - id: "rfc8414-jwks-uri-must-be-absolute-https-url"
+    title: "Reject discovery metadata whose jwks_uri is not an absolute HTTPS URL"
+    standard_refs:
+      - "RFC8414"
+    surface: "sdk-client.discovery"
+    priority: "high"
+    requirement_summary: "jwks_uri MUST resolve to a valid absolute HTTPS URL."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "/relative-jwks"
+    stimulus:
+      operation: "client.create"
+    expected:
+      outcome: "reject"
+      error_category: "metadata_or_transport_failure"
+    rationale: "Relative or non-HTTPS endpoint metadata should not be trusted."
+  - id: "rfc8414-token-endpoint-required-when-token-operation-is-used"
+    title: "Require token_endpoint when token endpoint operations are invoked"
+    standard_refs:
+      - "RFC8414"
+      - "RFC6749"
+      - "RFC8693"
+    surface: "sdk-client.token-endpoint"
+    priority: "high"
+    requirement_summary: "If client_credentials or token exchange is requested, discovery metadata MUST expose a token endpoint."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+    stimulus:
+      operation: "client._get_token_endpoint or token operation"
+    expected:
+      outcome: "reject"
+      error_category: "missing_metadata_endpoint"
+      error_hint: "token_endpoint"
+    rationale: "Ensures token operations are bound to explicit metadata instead of implicit defaults."
+  - id: "rfc8414-token-endpoint-must-be-absolute-https-url"
+    title: "Reject token_endpoint metadata values that are not absolute HTTPS URLs"
+    standard_refs:
+      - "RFC8414"
+      - "RFC6749"
+    surface: "sdk-client.token-endpoint"
+    priority: "medium"
+    requirement_summary: "token_endpoint MUST resolve to a valid absolute HTTPS URL."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+        token_endpoint: "http://auth.example.com/oauth/token"
+    stimulus:
+      operation: "client.client_credentials or client.exchange"
+    expected:
+      outcome: "reject"
+      error_category: "metadata_or_transport_failure"
+    rationale: "Discovery metadata should not downgrade token endpoint transport."
+  - id: "rfc6749-client-credentials-success-response"
+    title: "Accept a valid client_credentials success response"
+    standard_refs:
+      - "RFC6749"
+    surface: "sdk-client.client-credentials"
+    priority: "high"
+    requirement_summary: "A 2xx token endpoint response with the required fields MUST map to a token response object."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "new_token"
+          token_type: "Bearer"
+          expires_in: 3600
+          scope: "read"
+    stimulus:
+      operation: "client_credentials_grant"
+    expected:
+      outcome: "accept"
+      result_shape: "token_response"
+    rationale: "Defines the baseline success contract used by all SDKs."
+  - id: "rfc6749-basic-auth-credentials-must-be-form-urlencoded-before-base64"
+    title: "Percent-encode client_id and client_secret before Basic auth base64 encoding"
+    standard_refs:
+      - "RFC6749"
+    surface: "sdk-client.http-auth"
+    priority: "high"
+    requirement_summary: "Client credentials in HTTP Basic auth MUST be form-urlencoded before base64 encoding."
+    setup:
+      client_id: "http://localhost:8080/mcp"
+      client_secret: "s3cret"
+    stimulus:
+      operation: "build_basic_auth_header then introspection or token exchange request"
+    expected:
+      outcome: "accept"
+      header_shape: "Basic base64(urlencode(client_id):urlencode(client_secret))"
+    rationale: "Prevents interoperability bugs for credentials containing reserved characters."
+  - id: "rfc6749-token-response-must-contain-access-token"
+    title: "Reject successful token responses that omit access_token"
+    standard_refs:
+      - "RFC6749"
+    surface: "sdk-client.token-response-parsing"
+    priority: "critical"
+    requirement_summary: "A token endpoint success response MUST contain a non-empty access_token."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          token_type: "Bearer"
+    stimulus:
+      operation: "parse_token_response"
+    expected:
+      outcome: "reject"
+      error_category: "protocol_error"
+      error_hint: "access_token"
+    rationale: "Prevents malformed or malicious token responses from being treated as valid."
+  - id: "rfc6749-token-response-token-type-must-be-supported"
+    title: "Reject successful token responses with unsupported token_type"
+    standard_refs:
+      - "RFC6749"
+      - "RFC9449"
+    surface: "sdk-client.token-response-parsing"
+    priority: "critical"
+    requirement_summary: "A token endpoint success parser MUST reject token_type values outside the supported set for the\
+      \ active profile."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "tok"
+          token_type: "N_A"
+    stimulus:
+      operation: "parse_token_response"
+    expected:
+      outcome: "reject"
+      error_category: "protocol_error"
+      error_hint: "unsupported token_type"
+    rationale: "Prevents malformed or unknown token semantics from being treated as usable access-token responses."
+  - id: "rfc9449-token-response-token-type-dpop-must-be-accepted"
+    title: "Accept successful token responses that declare token_type DPoP"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.token-response-parsing"
+    priority: "critical"
+    requirement_summary: "When DPoP support is in scope, the token response parser MUST accept token_type DPoP on successful\
+      \ token endpoint responses."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "tok"
+          token_type: "DPoP"
+    stimulus:
+      operation: "parse_token_response"
+    expected:
+      outcome: "accept"
+      result_shape:
+        token_type: "DPoP"
+    rationale: "RFC 9449 uses token_type DPoP for sender-constrained token responses; rejecting it makes outbound DPoP unusable."
+  - id: "rfc6749-token-response-expires-in-must-be-non-negative-integer"
+    title: "Reject successful token responses with malformed or negative expires_in"
+    standard_refs:
+      - "RFC6749"
+    surface: "sdk-client.token-response-parsing"
+    priority: "high"
+    requirement_summary: "expires_in MUST parse as a non-negative integer when present."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "tok"
+          token_type: "Bearer"
+          expires_in: -1
+    stimulus:
+      operation: "parse_token_response"
+    expected:
+      outcome: "reject"
+      error_category: "protocol_error"
+      error_hint: "non-negative"
+    rationale: "Prevents invalid cache TTLs and undefined token lifetime behavior."
+  - id: "rfc6749-invalid-client-must-map-to-authentication-failure"
+    title: "Map invalid_client token endpoint errors to a client-authentication failure"
+    standard_refs:
+      - "RFC6749"
+    surface: "sdk-client.token-endpoint-errors"
+    priority: "high"
+    requirement_summary: "invalid_client responses MUST surface as a client-authentication failure category."
+    setup:
+      token_endpoint_response:
+        status_code: 401
+        body:
+          error: "invalid_client"
+          error_description: "bad creds"
+    stimulus:
+      operation: "client_credentials_grant"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_client"
+    rationale: "Keeps auth failures distinguishable from grant or server failures."
+  - id: "rfc7009-revocation-200-is-success-even-for-already-invalid-token"
+    title: "Treat HTTP 200 from revocation endpoint as success"
+    standard_refs:
+      - "RFC7009"
+    surface: "sdk-client.revocation"
+    priority: "medium"
+    requirement_summary: "A revocation endpoint 200 response MUST be treated as success."
+    setup:
+      revocation_response:
+        status_code: 200
+        body: {}
+    stimulus:
+      operation: "revoke_token"
+    expected:
+      outcome: "accept"
+    rationale: "Matches RFC 7009 idempotent success behavior."
+  - id: "rfc7009-revocation-request-must-post-token-and-token-type-hint"
+    title: "POST token and token_type_hint to the revocation endpoint"
+    standard_refs:
+      - "RFC7009"
+    surface: "sdk-client.revocation"
+    priority: "high"
+    requirement_summary: "A revocation request MUST include the token and SHOULD send token_type_hint when known."
+    setup:
+      token: "token_to_revoke"
+      token_type_hint: "access_token"
+    stimulus:
+      operation: "revoke_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "token"
+        - "token_type_hint=access_token"
+    rationale: "Defines the RFC 7009 on-the-wire request shape."
+  - id: "rfc7662-introspection-request-must-post-token-and-access-token-hint"
+    title: "POST token and token_type_hint=access_token to introspection endpoint"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "high"
+    requirement_summary: "An introspection request MUST include the token and should send token_type_hint=access_token for\
+      \ access tokens."
+    setup:
+      token: "my.raw.token"
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "token"
+        - "token_type_hint=access_token"
+    rationale: "Defines the baseline on-the-wire shape for cross-language interoperability."
+  - id: "rfc7662-introspection-without-credentials-must-not-send-authorization-header"
+    title: "Send no Authorization header when introspection credentials are absent"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "medium"
+    requirement_summary: "If no AS credentials are configured, the SDK MUST NOT synthesize an Authorization header."
+    setup: {}
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      request_header_absent: "Authorization"
+    rationale: "Preserves explicit caller control over authenticated vs unauthenticated introspection."
+  - id: "rfc7662-introspection-basic-auth-must-be-supported"
+    title: "Support authenticated introspection with HTTP Basic"
+    standard_refs:
+      - "RFC7662"
+      - "RFC6749"
+    surface: "sdk-client.introspection"
+    priority: "high"
+    requirement_summary: "If AS credentials are configured, introspection requests MUST include HTTP Basic auth."
+    setup:
+      auth:
+        client_id: "my-client-id"
+        client_secret: "my-client-secret"
+    stimulus:
+      operation: "introspect_token or verifier with IntrospectionRevocation"
+    expected:
+      outcome: "accept"
+      request_header_present: "Authorization: Basic ..."
+    rationale: "Common AS deployments require authenticated introspection."
+  - id: "rfc7662-introspection-active-false-must-parse-as-inactive"
+    title: "Parse active=false introspection responses as inactive"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "high"
+    requirement_summary: "The active field MUST drive active/inactive interpretation."
+    setup:
+      introspection_response:
+        active: false
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      result_shape:
+        active: false
+    rationale: "Inactive tokens must be distinguishable from network or parsing failures."
+  - id: "rfc7662-introspection-missing-active-must-default-to-inactive"
+    title: "Default introspection responses missing active to inactive"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "medium"
+    requirement_summary: "If the introspection response omits active, the SDK profile MUST treat the token as inactive."
+    setup:
+      introspection_response:
+        error: "invalid_token"
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      result_shape:
+        active: false
+    rationale: "Fail-closed parsing avoids treating malformed introspection responses as active."
+  - id: "rfc7662-introspection-standard-fields-must-round-trip"
+    title: "Parse standard introspection response fields"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "medium"
+    requirement_summary: "Standard introspection fields SHOULD be surfaced without loss."
+    setup:
+      introspection_response:
+        active: true
+        scope: "read:data write:data"
+        client_id: "client456"
+        sub: "user123"
+        token_type: "access_token"
+        iss: "https://auth.example.com"
+        aud: "https://api.example.com"
+        exp: 1234567890
+        iat: 1234567800
+        jti: "token-id-123"
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      result_shape: "introspection_response with fields preserved"
+    rationale: "Cross-language parity requires consistent field exposure."
+  - id: "rfc7662-introspection-audience-must-parse-string-or-array"
+    title: "Parse introspection aud field as either a single string or a JSON array"
+    standard_refs:
+      - "RFC7662"
+      - "RFC7519"
+    surface: "sdk-client.introspection"
+    priority: "medium"
+    requirement_summary: "The aud field in an introspection response follows RFC 7519 semantics and MAY be a string or an\
+      \ array of strings. The SDK MUST handle both forms."
+    setup:
+      introspection_response_string_aud:
+        active: true
+        aud: "https://api.example.com"
+      introspection_response_array_aud:
+        active: true
+        aud:
+          - "https://api.example.com"
+          - "https://other.example.com"
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      result_shape: "introspection_response with aud preserved in both forms"
+    rationale: "RFC 7519 §4.1.3 allows aud as a single string or an array. Servers commonly return arrays; SDKs that only\
+      \ handle strings silently lose audience data."
+  - id: "rfc7662-verifier-active-false-must-reject-token"
+    title: "When introspection-backed revocation is enabled, active=false must reject the token"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-verifier.revocation"
+    priority: "high"
+    requirement_summary: "With introspection-based revocation enabled, inactive tokens MUST be rejected."
+    setup:
+      verifier_mode: "IntrospectionRevocation"
+      introspection_response:
+        active: false
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "token_inactive"
+    rationale: "RFC 7662 §2.2 defines active=false broadly — the token may be expired, revoked, unknown, or out-of-policy\
+      \ — and authserver does not distinguish these cases in the introspection response. The verifier rejects with a generic\
+      \ token_inactive category rather than assuming a specific cause such as revocation."
+  - id: "rfc7662-introspection-fail-open-policy-must-be-explicitly-tested"
+    title: "When configured fail-open, introspection endpoint failures should not revoke otherwise valid tokens"
+    standard_refs:
+      - "RFC7662"
+    surface: "sdk-verifier.revocation"
+    priority: "medium"
+    requirement_summary: "If the SDK adopts fail-open introspection policy, server failures MUST preserve token acceptance."
+    setup:
+      verifier_mode: "IntrospectionRevocation"
+      introspection_response:
+        status_code: 500
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "accept"
+    rationale: "Fail-open introspection is an explicit SDK opt-in, not a default. RFC 7662 §4 (Security Considerations) warns\
+      \ that treating introspection failures as acceptance allows a down authorization server to serve revoked tokens. This\
+      \ case documents the behavior required WHEN the opt-in is engaged; SDKs MUST default to fail-closed."
+  - id: "rfc8693-grant-type-must-be-token-exchange"
+    title: "Always send the token exchange grant_type"
+    standard_refs:
+      - "RFC8693"
+    surface: "sdk-client.token-exchange"
+    priority: "critical"
+    requirement_summary: "Token exchange requests MUST send grant_type=urn:ietf:params:oauth:grant-type:token-exchange."
+    setup:
+      subject_token: "eyJ..."
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "grant_type=urn:ietf:params:oauth:grant-type:token-exchange"
+    rationale: "This is the defining token exchange protocol selector."
+  - id: "rfc8693-subject-token-is-required"
+    title: "Reject token exchange calls that omit subject_token"
+    standard_refs:
+      - "RFC8693"
+    surface: "sdk-client.token-exchange"
+    priority: "critical"
+    requirement_summary: "subject_token is mandatory for the supported token exchange flow."
+    setup:
+      subject_token: ""
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "reject"
+      error_category: "validation_error"
+      error_hint: "subject_token is required"
+    rationale: "Avoids issuing malformed token exchange requests."
+  - id: "rfc8693-default-subject-token-type-is-access-token"
+    title: "Default empty subject_token_type to the access-token URN"
+    standard_refs:
+      - "RFC8693"
+    surface: "sdk-client.token-exchange"
+    priority: "high"
+    requirement_summary: "When subject_token_type is omitted, the SDK SHOULD send the access-token token-type URN."
+    setup:
+      subject_token: "eyJ..."
+      subject_token_type: ""
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "subject_token_type=urn:ietf:params:oauth:token-type:access_token"
+    rationale: "Provides stable cross-SDK behavior for the common access-token exchange case."
+  - id: "rfc8693-actor-token-type-defaults-when-actor-token-is-present"
+    title: "Default actor_token_type when actor_token is supplied without an explicit type"
+    standard_refs:
+      - "RFC8693"
+    surface: "sdk-client.token-exchange"
+    priority: "medium"
+    requirement_summary: "If actor_token is present and actor_token_type is empty, the SDK SHOULD default actor_token_type\
+      \ to the access-token token-type URN."
+    setup:
+      subject_token: "eyJ..."
+      actor_token: "eyJ..."
+      actor_token_type: ""
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "actor_token"
+        - "actor_token_type=urn:ietf:params:oauth:token-type:access_token"
+    rationale: "Stabilizes request semantics for delegated exchange flows."
+  - id: "rfc8693-resource-parameter-must-be-sent-when-configured"
+    title: "Include resource parameter(s) in token exchange requests"
+    standard_refs:
+      - "RFC8693"
+      - "RFC8707"
+    surface: "sdk-client.token-exchange"
+    priority: "high"
+    requirement_summary: "When resource indicators are configured, the request MUST include resource parameter values."
+    setup:
+      subject_token: "eyJ..."
+      resources:
+        - "https://mcp.example.com/"
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "resource=https://mcp.example.com/"
+    rationale: "Links token exchange semantics to resource-indicator support."
+  - id: "rfc8693-multiple-resource-parameters-must-be-emitted"
+    title: "Emit one resource parameter per configured resource value"
+    standard_refs:
+      - "RFC8693"
+      - "RFC8707"
+    surface: "sdk-client.token-exchange"
+    priority: "medium"
+    requirement_summary: "If multiple resource values are configured, the request MUST emit multiple resource parameters."
+    setup:
+      subject_token: "eyJ..."
+      resources:
+        - "https://api-one.example.com"
+        - "https://api-two.example.com"
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "resource=https://api-one.example.com"
+        - "resource=https://api-two.example.com"
+    rationale: "RFC 8693 allows repeated parameter values and cross-SDK behavior should match."
+  - id: "rfc8693-error-mapping-invalid-grant"
+    title: "Map invalid_grant token exchange failures to an invalid-grant error"
+    standard_refs:
+      - "RFC8693"
+      - "RFC6749"
+    surface: "sdk-client.token-exchange"
+    priority: "high"
+    requirement_summary: "invalid_grant from token exchange MUST surface distinctly."
+    setup:
+      token_endpoint_response:
+        status_code: 400
+        body:
+          error: "invalid_grant"
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_grant"
+    rationale: "Allows callers to distinguish subject-token problems from server or client-auth failures."
+  - id: "rfc8707-client-credentials-resource-parameter-should-be-supported"
+    title: "Include resource in client_credentials requests when configured"
+    standard_refs:
+      - "RFC6749"
+      - "RFC8707"
+    surface: "sdk-client.client-credentials"
+    priority: "medium"
+    requirement_summary: "If a resource indicator is configured for client_credentials, the SDK SHOULD send it as a resource\
+      \ parameter."
+    setup:
+      resource: "https://api.example.com"
+    stimulus:
+      operation: "client_credentials_grant"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "resource=https://api.example.com"
+    rationale: "Resource indicators are part of the implemented SDK surface and need parity tests across languages."
+  - id: "rfc9068-valid-at-jwt-must-verify"
+    title: "Accept a well-formed at+jwt access token with valid signature and claims"
+    standard_refs:
+      - "RFC9068"
+      - "RFC8725"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "A valid at+jwt access token matching issuer, audience, and signature expectations MUST verify successfully."
+    setup:
+      token_header:
+        alg: "ES256"
+        typ: "at+jwt"
+        kid: "test-key-1"
+      token_claims:
+        iss: "https://auth.example.com"
+        aud: "https://api.example.com"
+        sub: "user123"
+        client_id: "client456"
+        exp: "future"
+        iat: "now"
+        jti: "token-id-123"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "accept"
+      result_shape: "verified_claims"
+    rationale: "Defines the normative success case for resource-server JWT validation."
+  - id: "rfc9068-typ-must-be-at-jwt"
+    title: "Reject JWTs whose typ is not at+jwt"
+    standard_refs:
+      - "RFC9068"
+      - "RFC8725"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "The token type MUST be at+jwt for this verifier profile."
+    setup:
+      token_header:
+        typ: "JWT"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+    rationale: "Prevents confusion with ID tokens or generic JWTs."
+  - id: "rfc9068-issuer-must-match"
+    title: "Reject access tokens whose iss does not match the configured issuer"
+    standard_refs:
+      - "RFC9068"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "The iss claim MUST exactly match the configured issuer."
+    setup:
+      token_claims:
+        iss: "https://wrong-issuer.com"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+    rationale: "Issuer mismatches are trust-boundary failures."
+  - id: "rfc9068-audience-must-match-resource"
+    title: "Reject access tokens whose audience does not include the configured resource"
+    standard_refs:
+      - "RFC9068"
+      - "RFC8707"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "The aud claim MUST contain the configured resource."
+    setup:
+      token_claims:
+        aud: "https://wrong-audience.com"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+    rationale: "Prevents token replay at unintended resources."
+  - id: "rfc9068-required-claims-must-be-enforced"
+    title: "Reject JWT access tokens missing any RFC 9068 §2.2 required claim"
+    standard_refs:
+      - "RFC9068"
+      - "RFC7519"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "iss, exp, aud, sub, client_id, iat, and jti MUST all be present in an at+jwt access token. A token\
+      \ missing any one of these MUST be rejected."
+    setup:
+      token_header:
+        alg: "ES256"
+        typ: "at+jwt"
+        kid: "test-key-1"
+      token_claims_missing_any_of:
+        - "iss"
+        - "exp"
+        - "aud"
+        - "sub"
+        - "client_id"
+        - "iat"
+        - "jti"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+    rationale: "RFC 9068 §2.2 lists iss, exp, aud, sub, client_id, iat, and jti as REQUIRED. The catalog tests one permutation\
+      \ per claim: for each claim c in token_claims_missing_any_of, a token missing only c (with all other claims valid) must\
+      \ be rejected."
+  - id: "rfc9068-token-header-must-contain-kid"
+    title: "Reject JWT access tokens whose JOSE header omits kid"
+    standard_refs:
+      - "RFC9068"
+      - "RFC8725"
+    surface: "sdk-verifier.jwt"
+    priority: "high"
+    requirement_summary: "The JOSE header MUST contain a key identifier when key selection depends on kid."
+    setup:
+      token_header:
+        alg: "ES256"
+        typ: "at+jwt"
+      token_claims: "otherwise valid"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+      error_hint: "kid"
+    rationale: "Avoids ambiguous or unsafe key selection."
+  - id: "rfc9068-iat-future-must-be-rejected-beyond-leeway"
+    title: "Reject iat values that are too far in the future"
+    standard_refs:
+      - "RFC9068"
+    surface: "sdk-verifier.jwt"
+    priority: "high"
+    requirement_summary: "iat MUST NOT be unreasonably in the future beyond configured clock skew."
+    setup:
+      token_claims:
+        iat: "future beyond clock skew"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+    rationale: "Protects against tokens that are not yet valid but may pass signature checks."
+  - id: "rfc9068-nbf-must-be-honored-when-present"
+    title: "Reject JWT access tokens whose nbf is in the future beyond clock skew"
+    standard_refs:
+      - "RFC9068"
+      - "RFC7519"
+    surface: "sdk-verifier.jwt"
+    priority: "high"
+    requirement_summary: "When an access token contains a nbf (not-before) claim, the verifier MUST reject the token if the\
+      \ current time is before nbf minus any configured clock skew."
+    setup:
+      token_claims:
+        iss: "https://auth.example.com"
+        aud: "https://api.example.com"
+        sub: "user123"
+        client_id: "client456"
+        exp: "future"
+        iat: "now"
+        nbf: "5 minutes in the future"
+        jti: "token-id-123"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+      error_hint: "nbf"
+    rationale: "RFC 7519 §4.1.5 requires that a JWT with nbf MUST NOT be accepted before that time. Authorization servers\
+      \ commonly set nbf on every token; ignoring it weakens temporal validation."
+  - id: "rfc8725-allowed-jwt-algorithms-must-be-restricted"
+    title: "Reject unsupported JWT algorithms and constructor-time disallowed algorithms"
+    standard_refs:
+      - "RFC8725"
+      - "RFC9068"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "The verifier profile MUST restrict accepted algorithms to the supported asymmetric set."
+    setup:
+      unsupported_algorithms:
+        - "none"
+        - "HS256"
+    stimulus:
+      operation: "verifier construction and verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_configuration_or_invalid_claims"
+    rationale: "Algorithm confusion is a high-severity JWT risk."
+  - id: "rfc8725-kid-must-resolve-through-jwks-with-single-refresh-on-miss"
+    title: "On kid miss, perform one JWKS refresh and then fail if still unresolved"
+    standard_refs:
+      - "RFC8725"
+    surface: "sdk-verifier.jwks"
+    priority: "high"
+    requirement_summary: "Unknown kid SHOULD trigger one JWKS refresh for rotation tolerance, then fail closed if still unresolved."
+    setup:
+      initial_jwks: []
+      refreshed_jwks: "either contains key or remains missing"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome_matrix:
+        key_appears_after_refresh: "accept"
+        key_still_missing: "reject"
+    rationale: "Balances rotation support against attacker-driven repeated fetch churn."
+  - id: "rfc8725-jwk-selection-must-honor-use-key-ops-and-alg"
+    title: "Ignore JWKs that are not valid for signature verification"
+    standard_refs:
+      - "RFC8725"
+      - "RFC7517"
+    surface: "sdk-verifier.jwks"
+    priority: "high"
+    requirement_summary: "JWK selection MUST reject keys whose declared use, key_ops, or alg are incompatible with verification."
+    setup:
+      jwks_document:
+        keys:
+          - {kid: "k1", kty: "EC", use: "enc", alg: "ES256"}
+          - {kid: "k1", kty: "EC", key_ops: ["sign"], alg: "ES256"}
+          - {kid: "k1", kty: "EC", use: "sig", key_ops: ["verify"], alg: "RS256"}
+    stimulus:
+      operation: "jwks_cache.get_key_by_kid(kid='k1', algorithm='ES256')"
+    expected:
+      outcome: "reject"
+      result: "no matching key"
+    rationale: "Prevents mixed-use or algorithm-incompatible keys from being trusted."
+  - id: "rfc9449-dpop-provider-must-build-dpop-jwt-header"
+    title: "Build outbound DPoP proofs with typ=dpop+jwt and a public JWK"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.dpop.outbound"
+    priority: "high"
+    requirement_summary: "Generated DPoP proofs MUST use typ=dpop+jwt and include a public JWK in the header."
+    setup:
+      dpop_key_algorithm: "ES256"
+    stimulus:
+      operation: "dpop_provider.build_headers"
+    expected:
+      outcome: "accept"
+      proof_header_contains:
+        - "typ=dpop+jwt"
+        - "alg=ES256"
+        - "jwk"
+    rationale: "Defines baseline proof construction across SDKs."
+  - id: "rfc9449-dpop-proof-header-typ-must-be-dpop-jwt"
+    title: "Reject DPoP proofs whose JOSE typ is not dpop+jwt"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "DPoP proof JOSE typ MUST be dpop+jwt."
+    setup:
+      proof_header:
+        typ: "JWT"
+        alg: "ES256"
+        jwk: "valid public key"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "typ"
+    rationale: "Prevents confusion with generic JWTs."
+  - id: "rfc9449-dpop-nonce-challenge-must-trigger-single-retry"
+    title: "Retry a DPoP-protected form POST once when challenged with DPoP-Nonce"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.dpop.outbound"
+    priority: "high"
+    requirement_summary: "When the AS returns a DPoP nonce challenge, the SDK SHOULD store the nonce and retry once with an\
+      \ updated proof."
+    setup:
+      first_response:
+        status_code: 400
+        body:
+          error: "use_dpop_nonce"
+        headers:
+          DPoP-Nonce: "nonce-123"
+      second_response:
+        status_code: 200
+        body:
+          access_token: "ok"
+          token_type: "DPoP"
+    stimulus:
+      operation: "form_post with dpop provider"
+    expected:
+      outcome: "accept"
+      side_effect:
+        - "exactly one retry"
+        - "nonce stored for endpoint origin"
+    rationale: "Nonce handling is central to interoperable DPoP deployments."
+  - id: "rfc9449-dpop-nonce-on-success-response-should-be-stored"
+    title: "Store DPoP-Nonce values returned on successful responses"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.dpop.outbound"
+    priority: "medium"
+    requirement_summary: "When the AS returns DPoP-Nonce on a successful response, the SDK SHOULD store it for the next request\
+      \ to that origin."
+    setup:
+      response:
+        status_code: 200
+        body:
+          access_token: "ok"
+          token_type: "DPoP"
+        headers:
+          DPoP-Nonce: "nonce-456"
+    stimulus:
+      operation: "form_post with dpop provider"
+    expected:
+      outcome: "accept"
+      side_effect:
+        - "nonce stored for endpoint origin"
+    rationale: "Some authorization servers pre-seed nonce rotation on success responses to avoid an extra challenge round-trip."
+  - id: "rfc9110-rfc9449-dpop-nonce-header-must-be-treated-case-insensitively"
+    title: "Treat DPoP-Nonce challenge header names case-insensitively"
+    standard_refs:
+      - "RFC9110"
+      - "RFC9449"
+    surface: "sdk-client.dpop.outbound"
+    priority: "high"
+    requirement_summary: "DPoP nonce challenge handling MUST treat the DPoP-Nonce HTTP header field name case-insensitively."
+    setup:
+      first_response:
+        status_code: 400
+        body:
+          error: "use_dpop_nonce"
+        headers:
+          Dpop-Nonce: "nonce-123"
+      second_response:
+        status_code: 200
+        body:
+          access_token: "ok"
+          token_type: "DPoP"
+    stimulus:
+      operation: "form_post with dpop provider"
+    expected:
+      outcome: "accept"
+      side_effect:
+        - "exactly one retry"
+        - "nonce stored for endpoint origin"
+    rationale: "HTTP header field names are case-insensitive; DPoP nonce handling must not depend on one specific header casing."
+  - id: "rfc9449-inbound-dpop-proof-must-validate-method-url-and-binding"
+    title: "Accept a valid DPoP-bound request only when proof, URL, method, and cnf.jkt all align"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "A DPoP-bound access token request MUST validate the proof signature, htm, normalized htu, and token-binding\
+      \ thumbprint."
+    setup:
+      resource_supports_dpop: true
+      access_token_claims:
+        cnf:
+          jkt: "matching-thumbprint"
+      proof:
+        valid: true
+        htm: "GET"
+        htu: "https://api.example.com/resource"
+    stimulus:
+      operation: "verifier.verify_dpop"
+    expected:
+      outcome: "accept"
+      result_shape:
+        - "verified_claims"
+        - "verified_dpop_proof"
+    rationale: "Defines the normative success path for sender-constrained access tokens."
+  - id: "rfc9449-bearer-token-with-request-context-and-no-proof-must-still-verify-as-bearer"
+    title: "Accept bearer tokens when request context is present but no DPoP proof is supplied"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "medium"
+    requirement_summary: "If request context is provided but the access token is not DPoP-bound and no DPoP proof is present,\
+      \ verification MUST still succeed as bearer token validation."
+    setup:
+      access_token_claims:
+        cnf:
+      request_context:
+        method: "GET"
+        url: "https://api.example.com/resource"
+        proof:
+    stimulus:
+      operation: "verifier.verify with request context"
+    expected:
+      outcome: "accept"
+      result_shape:
+        - "verified_claims"
+      result_absent:
+        - "verified_dpop_proof"
+    rationale: "A single verify entrypoint must preserve normal bearer-token behavior when no sender binding exists."
+  - id: "rfc9449-dpop-bound-token-with-request-context-and-no-proof-must-be-rejected-via-main-verify-path"
+    title: "Reject DPoP-bound tokens when request context is present but the proof is missing"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "If request context is provided and the access token is DPoP-bound, the main verify path MUST reject\
+      \ the request when the DPoP proof is missing."
+    setup:
+      resource_supports_dpop: true
+      access_token_claims:
+        cnf:
+          jkt: "matching-thumbprint"
+      request_context:
+        method: "GET"
+        url: "https://api.example.com/resource"
+        proof:
+    stimulus:
+      operation: "verifier.verify with request context"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_proof_missing"
+    rationale: "A single verify entrypoint must still enforce sender proof requirements for DPoP-bound tokens."
+  - id: "rfc9449-dpop-replay-must-be-detected"
+    title: "Reject reuse of the same DPoP proof jti within the replay window"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "The replay store MUST cause the same proof jti to be rejected on second use."
+    setup:
+      replay_store: "shared or in-memory store"
+      same_proof_reused: true
+    stimulus:
+      operation: "verify_dpop twice with same proof"
+    expected:
+      outcome: "reject on second attempt"
+      error_category: "dpop_replay_detected"
+    rationale: "Replay protection is a core DPoP security property. RFC 9449 §11.1 describes jti tracking as a recommended\
+      \ technique; this profile upgrades it to a MUST and mandates a replay store."
+  - id: "rfc9449-dpop-method-mismatch-must-be-rejected"
+    title: "Reject DPoP proofs whose htm does not match the request method"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "DPoP proof htm MUST match the actual HTTP method."
+    setup:
+      proof:
+        htm: "POST"
+      request:
+        method: "GET"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "method mismatch"
+    rationale: "Prevents proof reuse across methods."
+  - id: "rfc9449-dpop-url-mismatch-must-be-rejected"
+    title: "Reject DPoP proofs whose htu does not match the normalized request URL"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "DPoP proof htu MUST match the normalized request URL."
+    setup:
+      proof:
+        htu: "https://api.example.com/other"
+      request:
+        url: "https://api.example.com/resource?query=ignored"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "URL mismatch"
+    rationale: "Prevents proof reuse across different target URIs."
+  - id: "rfc9449-dpop-proof-htu-must-be-normalized-before-comparison"
+    title: "Normalize both request URL and proof htu before comparison"
+    standard_refs:
+      - "RFC9449"
+      - "RFC3986"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "The verifier MUST normalize both the request URL and the proof htu (scheme/host case, default port,\
+      \ strip query/fragment) before comparison."
+    setup:
+      proof_claims:
+        htu: "HTTPS://API.EXAMPLE.COM:443/resource"
+      request:
+        url: "https://api.example.com/resource?query=ignored"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "accept"
+    rationale: "RFC 9449 §4.2 and §4.3 item 9 require comparing against the target URI without query and fragment. RFC 9449\
+      \ §4.3 last paragraph RECOMMENDS (SHOULD) applying RFC 3986 §6.2.2 syntax-based and §6.2.3 scheme-based normalization;\
+      \ this profile upgrades that normalization to a MUST so case and default-port differences don't cause false rejections\
+      \ across implementations."
+  - id: "rfc9449-dpop-proof-htm-must-be-case-sensitive"
+    title: "Reject DPoP proofs whose htm differs only in case from the request method"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9110"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "DPoP proof htm comparison MUST be case-sensitive per RFC 9110 method token semantics."
+    setup:
+      proof_claims:
+        htm: "get"
+      request:
+        method: "GET"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "method mismatch"
+    rationale: "RFC 9110 §9.1 defines method tokens as case-sensitive. Accepting case-folded htm weakens proof binding."
+  - id: "rfc9449-dpop-replay-store-must-evict-expired-entries"
+    title: "DPoP replay store must not retain entries past their expiry"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "medium"
+    requirement_summary: "The replay store SHOULD evict expired entries so memory usage does not grow unbounded under sustained\
+      \ traffic."
+    setup:
+      replay_store: "in-memory store"
+      proof_sequence:
+        - jti: "proof-1"
+          expires_at: "past"
+        - jti: "proof-2"
+          expires_at: "future"
+    stimulus:
+      operation: "check_and_store after expiry of proof-1"
+    expected:
+      outcome: "accept"
+      side_effect:
+        - "proof-1 no longer occupies storage"
+    rationale: "Without eviction, unique-JTI traffic causes unbounded memory growth in long-running servers."
+  - id: "rfc9449-dpop-inbound-nonce-must-be-validated-when-required"
+    title: "Reject DPoP proofs with wrong or missing nonce when resource server nonce policy is configured"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "When the resource server is configured with a nonce policy, the verifier MUST reject proofs that\
+      \ carry a different nonce or omit the nonce claim entirely."
+    use_case: |
+      A resource server (e.g. an MCP server) may issue its own DPoP-Nonce challenges
+      independently of the AS. This is separate from AS-side nonce handling during token
+      acquisition. The flow adds an extra round-trip: the client sends a proof without a
+      nonce, the resource server responds with 401 + DPoP-Nonce header, and the client
+      retries with the server-issued nonce in the proof. This proves the proof was generated
+      after contacting the resource server, preventing pre-crafted proofs. Without this,
+      a client could build a proof minutes in advance and replay it within the iat max-age
+      window. This is most valuable for high-security resource servers; for typical MCP
+      servers the iat + max-age + jti replay detection is usually sufficient.
+    setup:
+      expected_nonce: "server-nonce-abc"
+      proof_claims:
+        nonce: "wrong-nonce"
+    stimulus:
+      operation: "verify_dpop_proof with nonce policy"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "nonce"
+    rationale: "Resource-server-issued nonces add a freshness guarantee on top of jti replay detection. When a verifier opts\
+      \ into nonce enforcement, mismatched or missing nonces must be rejected."
+  - id: "rfc9449-dpop-proof-exp-must-be-enforced-when-present"
+    title: "Reject DPoP proofs whose exp is in the past when exp is present"
+    standard_refs:
+      - "RFC9449"
+      - "RFC7519"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "If a DPoP proof includes exp, the verifier SHOULD reject the proof once exp is past the allowed\
+      \ clock skew."
+    setup:
+      proof_claims:
+        iat: "recent enough to pass max-age checks"
+        exp: "past beyond clock skew"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "expired"
+    rationale: "Generated proofs already carry exp, so validation should enforce it to avoid accepting proofs past their declared\
+      \ lifetime."
+  - id: "rfc9728-prm-must-contain-required-fields"
+    title: "Generate protected resource metadata with the required top-level fields"
+    standard_refs:
+      - "RFC9728"
+    surface: "sdk-resource-metadata"
+    priority: "medium"
+    requirement_summary: "PRM output MUST contain resource, authorization_servers, bearer_methods_supported, and scopes_supported."
+    setup:
+      issuer: "https://auth.example.com"
+      resource: "https://api.example.com"
+      scopes:
+        - "read:data"
+        - "write:data"
+    stimulus:
+      operation: "build_prm"
+    expected:
+      outcome: "accept"
+      result_contains:
+        - "resource"
+        - "authorization_servers"
+        - "bearer_methods_supported"
+        - "scopes_supported"
+    rationale: "Provides a cross-language contract for PRM generation."
+  - id: "rfc9728-prm-authorization-servers-must-list-the-issuer"
+    title: "PRM authorization_servers must contain the configured issuer"
+    standard_refs:
+      - "RFC9728"
+    surface: "sdk-resource-metadata"
+    priority: "medium"
+    requirement_summary: "authorization_servers MUST include the configured authorization server issuer."
+    setup:
+      issuer: "https://auth.example.com"
+      resource: "https://api.example.com"
+    stimulus:
+      operation: "build_prm"
+    expected:
+      outcome: "accept"
+      result_shape:
+        authorization_servers:
+          - "https://auth.example.com"
+    rationale: "Ensures resource metadata points clients to the correct AS."
+  - id: "rfc9728-prm-supported-bearer-methods-should-be-stable"
+    title: "Expose supported bearer methods consistently"
+    standard_refs:
+      - "RFC9728"
+      - "RFC6750"
+    surface: "sdk-resource-metadata"
+    priority: "low"
+    requirement_summary: "The SDK profile SHOULD consistently advertise header bearer transport."
+    setup:
+      issuer: "https://auth.example.com"
+      resource: "https://api.example.com"
+    stimulus:
+      operation: "build_prm"
+    expected:
+      outcome: "accept"
+      result_shape:
+        bearer_methods_supported:
+          - "header"
+    rationale: "Creates stable discovery behavior for protected resources."
+  - id: "rfc9728-well-known-path-must-derive-from-resource-uri"
+    title: "Well-known PRM path must be derived from the resource URI per RFC 9728"
+    standard_refs:
+      - "RFC9728"
+    surface: "sdk-resource-metadata"
+    priority: "medium"
+    requirement_summary: "The well-known URI MUST be formed by inserting /.well-known/oauth-protected-resource between the\
+      \ host and path component of the resource URI."
+    setup:
+      resources:
+        - "https://api.example.com"
+        - "https://api.example.com/mcp"
+        - "https://api.example.com/v2/mcp"
+    stimulus:
+      operation: "well_known_prm_path"
+    expected:
+      outcome: "accept"
+      result_shape:
+        "https://api.example.com": "/.well-known/oauth-protected-resource"
+        "https://api.example.com/mcp": "/.well-known/oauth-protected-resource/mcp"
+        "https://api.example.com/v2/mcp": "/.well-known/oauth-protected-resource/v2/mcp"
+    rationale: "Ensures clients can correctly discover PRM documents for resources with or without path components."
+  - id: "rfc8414-introspection-endpoint-required-when-introspection-is-used"
+    title: "Require introspection_endpoint when introspection operations are invoked"
+    standard_refs:
+      - "RFC8414"
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "high"
+    requirement_summary: "If introspection is requested, discovery metadata MUST expose an introspection_endpoint."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+    stimulus:
+      operation: "client.introspect"
+    expected:
+      outcome: "reject"
+      error_category: "missing_metadata_endpoint"
+      error_hint: "introspection_endpoint"
+    rationale: "Ensures introspection is always bound to explicit trusted metadata."
+  - id: "rfc8414-introspection-endpoint-must-be-absolute-https-url"
+    title: "Reject introspection_endpoint metadata values that are not absolute HTTPS URLs"
+    standard_refs:
+      - "RFC8414"
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "medium"
+    requirement_summary: "introspection_endpoint MUST resolve to a valid absolute HTTPS URL when present."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+        introspection_endpoint: "http://auth.example.com/oauth/introspect"
+    stimulus:
+      operation: "client.introspect"
+    expected:
+      outcome: "reject"
+      error_category: "metadata_or_transport_failure"
+    rationale: "Discovery metadata should not downgrade introspection endpoint transport."
+  - id: "rfc8414-revocation-endpoint-required-when-revocation-is-used"
+    title: "Require revocation_endpoint when revocation operations are invoked"
+    standard_refs:
+      - "RFC8414"
+      - "RFC7009"
+    surface: "sdk-client.revocation"
+    priority: "high"
+    requirement_summary: "If revocation is requested, discovery metadata MUST expose a revocation_endpoint."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+    stimulus:
+      operation: "client.revoke"
+    expected:
+      outcome: "reject"
+      error_category: "missing_metadata_endpoint"
+      error_hint: "revocation_endpoint"
+    rationale: "Prevents revocation operations from targeting implicit or untrusted endpoints."
+  - id: "rfc8414-revocation-endpoint-must-be-absolute-https-url"
+    title: "Reject revocation_endpoint metadata values that are not absolute HTTPS URLs"
+    standard_refs:
+      - "RFC8414"
+      - "RFC7009"
+    surface: "sdk-client.revocation"
+    priority: "medium"
+    requirement_summary: "revocation_endpoint MUST resolve to a valid absolute HTTPS URL when present."
+    setup:
+      metadata_document:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+        revocation_endpoint: "http://auth.example.com/oauth/revoke"
+    stimulus:
+      operation: "client.revoke"
+    expected:
+      outcome: "reject"
+      error_category: "metadata_or_transport_failure"
+    rationale: "Discovery metadata should not downgrade revocation endpoint transport."
+  - id: "rfc8414-jwks-uri-rotation-must-reconfigure-jwks-cache"
+    title: "Reconfigure JWKS resolution when metadata jwks_uri changes"
+    standard_refs:
+      - "RFC8414"
+      - "RFC8725"
+    surface: "sdk-client.discovery"
+    priority: "medium"
+    requirement_summary: "When trusted metadata changes jwks_uri, the SDK SHOULD rebind JWKS fetching to the new URI."
+    setup:
+      old_metadata:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/jwks-v1.json"
+      new_metadata:
+        issuer: "https://auth.example.com"
+        jwks_uri: "https://auth.example.com/jwks-v2.json"
+    stimulus:
+      operation: "client._on_metadata_changed"
+    expected:
+      outcome: "accept"
+      side_effect:
+        - "jwks_uri updated to new metadata value"
+    rationale: "Keeps key discovery aligned with metadata rotation without requiring client recreation."
+  - id: "rfc7009-revocation-server-errors-must-surface"
+    title: "Surface revocation endpoint server errors as failures"
+    standard_refs:
+      - "RFC7009"
+      - "RFC6749"
+    surface: "sdk-client.revocation"
+    priority: "high"
+    requirement_summary: "Non-success revocation endpoint server errors MUST surface as request failure rather than silent\
+      \ success."
+    setup:
+      revocation_response:
+        status_code: 500
+        body:
+          error: "server_error"
+    stimulus:
+      operation: "revoke_token"
+    expected:
+      outcome: "reject"
+      error_category: "server_error"
+    rationale: "Callers need to distinguish revocation success from AS-side failure."
+  - id: "rfc8693-audience-parameter-must-be-sent-when-configured"
+    title: "Include audience parameter(s) in token exchange requests when configured"
+    standard_refs:
+      - "RFC8693"
+      - "RFC8707"
+    surface: "sdk-client.token-exchange"
+    priority: "high"
+    requirement_summary: "When audience values are configured, the request MUST include audience parameter values."
+    setup:
+      subject_token: "eyJ..."
+      audiences:
+        - "api://inventory"
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "audience=api%3A%2F%2Finventory"
+    rationale: "Audience targeting is a core token exchange input and must be carried on the wire."
+  - id: "rfc8693-multiple-audience-parameters-must-be-emitted"
+    title: "Emit one audience parameter per configured audience value"
+    standard_refs:
+      - "RFC8693"
+      - "RFC8707"
+    surface: "sdk-client.token-exchange"
+    priority: "medium"
+    requirement_summary: "If multiple audience values are configured, the request MUST emit multiple audience parameters."
+    setup:
+      subject_token: "eyJ..."
+      audiences:
+        - "api://inventory"
+        - "api://billing"
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "audience=api%3A%2F%2Finventory"
+        - "audience=api%3A%2F%2Fbilling"
+    rationale: "RFC 8693 permits repeated audience values and SDKs should emit them consistently."
+  - id: "rfc8693-empty-resource-and-audience-values-must-be-omitted"
+    title: "Omit empty resource and audience parameter values from token exchange requests"
+    standard_refs:
+      - "RFC8693"
+      - "RFC8707"
+    surface: "sdk-client.token-exchange"
+    priority: "medium"
+    requirement_summary: "Empty resource or audience values MUST NOT be serialized into token exchange request parameters."
+    setup:
+      subject_token: "eyJ..."
+      resources:
+        - ""
+      audiences:
+        - ""
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      request_form_absent:
+        - "resource="
+        - "audience="
+    rationale: "Avoids malformed repeated parameters and preserves predictable request semantics."
+  - id: "rfc8693-success-response-must-use-access-token-issued-token-type-when-present"
+    title: "Preserve issued_token_type from token exchange success responses"
+    standard_refs:
+      - "RFC8693"
+    surface: "sdk-client.token-exchange"
+    priority: "medium"
+    requirement_summary: "issued_token_type is REQUIRED in token-exchange success responses per RFC 8693 §2.2.1 and is always\
+      \ emitted by authserver; the SDK MUST surface it unchanged to callers."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "new_token"
+          token_type: "Bearer"
+          issued_token_type: "urn:ietf:params:oauth:token-type:access_token"
+    stimulus:
+      operation: "exchange_token"
+    expected:
+      outcome: "accept"
+      result_shape:
+        issued_token_type: "urn:ietf:params:oauth:token-type:access_token"
+    rationale: "issued_token_type distinguishes exchange output semantics. RFC 8693 §2.2.1 marks it REQUIRED in the success\
+      \ response and authserver always emits it; the SDK must preserve the value without normalization so callers can reason\
+      \ about the issued token shape."
+  - id: "rfc8707-verifier-must-accept-resource-when-present-in-aud-array"
+    title: "Accept access tokens when the configured resource appears in an aud array"
+    standard_refs:
+      - "RFC8707"
+      - "RFC9068"
+      - "RFC7519"
+    surface: "sdk-verifier.jwt"
+    priority: "high"
+    requirement_summary: "The verifier MUST accept the token when the configured resource is one value within a multi-valued\
+      \ aud claim."
+    setup:
+      token_claims:
+        aud:
+          - "https://other.example.com"
+          - "https://api.example.com"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "accept"
+    rationale: "Resource indicator matching must work with array-valued audiences."
+  - id: "rfc9068-token-header-must-contain-alg"
+    title: "Reject JWT access tokens whose JOSE header omits alg"
+    standard_refs:
+      - "RFC9068"
+      - "RFC8725"
+      - "RFC7515"
+    surface: "sdk-verifier.jwt"
+    priority: "high"
+    requirement_summary: "The JOSE header MUST contain alg so signature verification policy is explicit."
+    setup:
+      token_header:
+        typ: "at+jwt"
+        kid: "test-key-1"
+      token_claims: "otherwise valid"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+      error_hint: "alg"
+    rationale: "Missing alg prevents safe and deterministic verification."
+  - id: "rfc9068-signature-failure-must-reject-token"
+    title: "Reject JWT access tokens with invalid signatures"
+    standard_refs:
+      - "RFC9068"
+      - "RFC8725"
+    surface: "sdk-verifier.jwt"
+    priority: "critical"
+    requirement_summary: "Signature verification failures MUST reject the token."
+    setup:
+      token_header:
+        alg: "ES256"
+        typ: "at+jwt"
+        kid: "test-key-1"
+      signature: "invalid"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_signature"
+    rationale: "Signature validation is a non-optional JWT trust check."
+  - id: "rfc9068-expiration-and-clock-skew-must-be-enforced"
+    title: "Enforce exp and nbf with configured clock skew"
+    standard_refs:
+      - "RFC9068"
+      - "RFC7519"
+    surface: "sdk-verifier.jwt"
+    priority: "high"
+    requirement_summary: "Expired tokens and not-yet-valid tokens beyond allowed skew MUST be rejected, while small skew within\
+      \ policy MAY be tolerated."
+    setup:
+      clock_skew_seconds: 30
+      token_claims:
+        exp: "past beyond skew or within skew"
+        nbf: "future beyond skew or within skew"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome_matrix:
+        exp_past_beyond_skew: "reject"
+        exp_past_within_skew: "accept"
+        nbf_future_beyond_skew: "reject"
+        nbf_future_within_skew: "accept"
+    rationale: "Cross-SDK parity depends on consistent skew handling at time boundaries."
+  - id: "rfc9449-generated-dpop-proof-should-include-exp"
+    title: "Generated DPoP proofs should include an exp claim later than iat"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.dpop.outbound"
+    priority: "medium"
+    requirement_summary: "Generated DPoP proofs SHOULD include an expiration time later than iat."
+    setup:
+      dpop_key_algorithm: "ES256"
+    stimulus:
+      operation: "dpop_provider.build_proof"
+    expected:
+      outcome: "accept"
+      proof_claims_contain:
+        - "iat"
+        - "exp"
+    rationale: "Short-lived proofs are a widely expected interoperability and hardening practice."
+  - id: "rfc9449-dpop-proof-must-carry-public-jwk"
+    title: "Reject DPoP proofs whose JOSE header omits the public jwk"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "DPoP proof JOSE headers MUST carry the public JWK used for verification."
+    setup:
+      proof_header:
+        typ: "dpop+jwt"
+        alg: "ES256"
+      proof_claims: "otherwise valid"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "jwk"
+    rationale: "Without a public JWK, the proof cannot be verified or bound."
+  - id: "rfc9449-dpop-proof-jwk-must-not-include-private-key-material"
+    title: "Reject DPoP proofs whose JOSE jwk includes private key material"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "The DPoP proof jwk header member MUST NOT include private key parameters."
+    setup:
+      proof_header:
+        typ: "dpop+jwt"
+        alg: "ES256"
+        jwk: "contains private key fields"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "private"
+    rationale: "Private key disclosure in proofs is both invalid and a severe key-management failure."
+  - id: "rfc9449-dpop-proof-alg-must-be-supported-asymmetric"
+    title: "Reject DPoP proofs that use unsupported or non-asymmetric algorithms"
+    standard_refs:
+      - "RFC9449"
+      - "RFC8725"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "DPoP proofs MUST use a supported asymmetric algorithm."
+    setup:
+      proof_header:
+        typ: "dpop+jwt"
+        alg: "HS256"
+        jwk: "valid public key"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "algorithm"
+    rationale: "DPoP depends on asymmetric proof-of-possession and must reject symmetric or unsupported alg values."
+  - id: "rfc9449-dpop-proof-iat-must-not-be-in-the-future-beyond-leeway"
+    title: "Reject DPoP proofs whose iat is too far in the future"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "DPoP proof iat MUST NOT be in the future beyond configured leeway."
+    setup:
+      proof_claims:
+        iat: "future beyond leeway"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "future"
+    rationale: "Future-dated proofs undermine replay-window enforcement."
+  - id: "rfc9449-dpop-proof-must-not-be-too-old"
+    title: "Reject DPoP proofs that are older than the accepted replay window"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "DPoP proof freshness checks MUST reject proofs that are too old."
+    setup:
+      proof_claims:
+        iat: "older than replay window"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "too old"
+    rationale: "Freshness limits are necessary to make replay protection meaningful."
+  - id: "rfc9449-dpop-proof-required-when-validating-dpop-bound-token"
+    title: "Reject DPoP-bound token validation attempts that omit the proof"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "When validating a DPoP-bound access token, the request MUST include a DPoP proof."
+    setup:
+      resource_supports_dpop: true
+      access_token_claims:
+        cnf:
+          jkt: "matching-thumbprint"
+      proof:
+    stimulus:
+      operation: "verifier.verify_dpop"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_proof_missing"
+    rationale: "A sender-constrained token without the sender proof must not be accepted."
+  - id: "rfc9449-dpop-binding-mismatch-must-be-rejected"
+    title: "Reject DPoP proofs whose signing key thumbprint does not match cnf.jkt"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "The proof signing key thumbprint MUST match the token cnf.jkt binding."
+    setup:
+      resource_supports_dpop: true
+      access_token_claims:
+        cnf:
+          jkt: "expected-thumbprint"
+      proof_signing_key_thumbprint: "different-thumbprint"
+    stimulus:
+      operation: "verifier.verify_dpop"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_binding_mismatch"
+    rationale: "Sender-constrained tokens are invalid if the proof key does not match the token binding."
+  - id: "rfc9449-dpop-ath-mismatch-must-be-rejected"
+    title: "Reject DPoP proofs whose ath does not match the presented access token"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "The proof ath claim MUST hash to the presented access token value."
+    setup:
+      access_token: "token-a"
+      proof_claims:
+        ath: "hash-of-token-b"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_dpop_proof"
+      error_hint: "ath"
+    rationale: "ath binds the proof to the specific access token and prevents proof reuse across tokens."
+  - id: "rfc9449-dpop-bound-token-must-contain-cnf-jkt"
+    title: "Reject DPoP validation attempts when the access token lacks cnf.jkt"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9068"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "A token treated as DPoP-bound MUST carry cnf.jkt so the proof can be bound to it."
+    setup:
+      resource_supports_dpop: true
+      access_token_claims:
+        cnf: {}
+      proof: "otherwise valid"
+    stimulus:
+      operation: "verifier.verify_dpop"
+    expected:
+      outcome: "reject"
+      error_category: "invalid_claims"
+      error_hint: "cnf"
+    rationale: "Without cnf.jkt the resource server cannot verify sender binding."
+  - id: "rfc9449-dpop-proof-validation-must-not-skip-binding-when-access-token-is-provided"
+    title: "Reject direct proof validation when access_token is supplied without an explicit binding expectation"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "If proof validation is given an access token to validate against, it MUST NOT silently skip binding\
+      \ enforcement."
+    setup:
+      access_token: "token-a"
+      expected_jkt:
+      proof: "otherwise valid"
+    stimulus:
+      operation: "verify_dpop_proof"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_binding_mismatch"
+    rationale: "APIs must not allow callers to accidentally bypass the sender-binding check."
+  - id: "rfc8414-discovery-url-must-insert-well-known-before-issuer-path"
+    title: "Construct the RFC 8414 discovery URL by inserting the well-known segment before the issuer path"
+    standard_refs:
+      - "RFC8414"
+    surface: "sdk-client.discovery"
+    priority: "high"
+    requirement_summary: "For an issuer with a path component, the metadata URL MUST place /.well-known/oauth-authorization-server\
+      \ after the authority and before the issuer path."
+    setup:
+      configured_issuer: "https://auth.example.com/tenant-a"
+      available_discovery_documents:
+        "https://auth.example.com/.well-known/oauth-authorization-server/tenant-a":
+          issuer: "https://auth.example.com/tenant-a"
+          jwks_uri: "https://auth.example.com/jwks.json"
+      unavailable_endpoints:
+        - "https://auth.example.com/tenant-a/.well-known/oauth-authorization-server"
+    stimulus:
+      operation: "client.create or metadata.get"
+    expected:
+      outcome: "accept"
+    rationale: "RFC 8414 defines well-known URL construction for path-based issuers; appending the well-known segment to the\
+      \ issuer path breaks tenant or realm scoped authorization servers."
+  - id: "rfc8707-client-credentials-multiple-resource-parameters-must-be-emitted"
+    title: "Emit one resource parameter per configured resource value in client_credentials requests"
+    standard_refs:
+      - "RFC6749"
+      - "RFC8707"
+    surface: "sdk-client.client-credentials"
+    priority: "medium"
+    requirement_summary: "When multiple resource indicators are configured for a client credentials grant, the request MUST\
+      \ emit one resource parameter per value."
+    setup:
+      resources:
+        - "https://api-one.example.com"
+        - "https://api-two.example.com"
+    stimulus:
+      operation: "client_credentials_grant"
+    expected:
+      outcome: "accept"
+      request_form_contains:
+        - "resource=https://api-one.example.com"
+        - "resource=https://api-two.example.com"
+    rationale: "Mirrors rfc8693-multiple-resource-parameters-must-be-emitted for token exchange. All grant types should support\
+      \ RFC 8707 consistently."
+  - id: "rfc6749-client-credentials-scopes-must-support-multiple-values"
+    title: "Send multiple scope values as a single space-delimited scope parameter in client_credentials requests"
+    standard_refs:
+      - "RFC6749"
+    surface: "sdk-client.client-credentials"
+    priority: "medium"
+    requirement_summary: "When multiple scope values are requested, the SDK MUST send them as a single space-delimited scope\
+      \ parameter."
+    setup:
+      scopes:
+        - "read"
+        - "write"
+    stimulus:
+      operation: "client_credentials_grant"
+    expected:
+      outcome: "accept"
+      request_form_contains_one_of:
+        - "scope=read+write"
+        - "scope=read%20write"
+    rationale: "Scopes are always space-delimited per RFC 6749. SDKs that only accept a pre-joined string force the caller\
+      \ to do encoding and prevent list-based APIs."
+  - id: "authplane-agent-id-must-be-exposed-as-first-class-field"
+    title: "Expose agent_id claim as a typed first-class field on VerifiedClaims"
+    standard_refs:
+      - "RFC7519"
+    surface: "sdk-verifier.claims"
+    priority: "high"
+    requirement_summary: "When a verified JWT contains an agent_id claim, the SDK MUST expose it as a typed field on VerifiedClaims,\
+      \ not only through the raw claims map."
+    setup:
+      token_claims:
+        agent_id: "research-agent"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "accept"
+      verified_claims_fields:
+        agentId: "research-agent"
+      absent_claim_default:
+        agentId: ""
+    rationale: "agent_id is emitted by authserver for all clients registered with is_agent: true. Resource servers need to\
+      \ identify acting agents without parsing raw claims."
+  - id: "authplane-agent-chain-must-be-exposed-as-first-class-field"
+    title: "Expose agent_chain claim as a typed list field on VerifiedClaims"
+    standard_refs:
+      - "RFC7519"
+    surface: "sdk-verifier.claims"
+    priority: "high"
+    requirement_summary: "When a verified JWT contains an agent_chain claim, the SDK MUST expose it as a typed list field\
+      \ on VerifiedClaims. Absence of the claim must yield an empty list."
+    setup:
+      token_claims:
+        agent_chain:
+          - "orchestrator"
+          - "research-agent"
+          - "summarizer"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "accept"
+      verified_claims_fields:
+        agentChain:
+          - "orchestrator"
+          - "research-agent"
+          - "summarizer"
+      absent_claim_default:
+        agentChain: []
+    rationale: "agent_chain is emitted by authserver for delegated tokens (token exchange with actor). It encodes the full\
+      \ delegation path and is needed by resource servers to enforce per-agent policies."
+  - id: "authplane-nbf-must-be-exposed-as-typed-field-on-verified-claims"
+    title: "Expose nbf claim as a typed integer field on VerifiedClaims after successful verification"
+    standard_refs:
+      - "RFC7519"
+    surface: "sdk-verifier.claims"
+    priority: "medium"
+    requirement_summary: "When a verified JWT contains an nbf claim, the SDK MUST expose it as a typed integer (Unix timestamp)\
+      \ field on VerifiedClaims. Absence of nbf must yield 0."
+    setup:
+      token_claims:
+        nbf: "<unix timestamp>"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "accept"
+      verified_claims_fields:
+        notBefore: "<expected unix timestamp>"
+      absent_claim_default:
+        notBefore: 0
+    notes:
+      - "Distinct from rfc9068-nbf-must-be-honored-when-present, which tests rejection of future-nbf tokens. This case tests\
+        \ accessibility of the value after successful verification."
+    rationale: "Resource servers may need to log or forward nbf for auditing or downstream delegation. Forcing users to parse\
+      \ raw for a standard claim is inconsistent with how exp, iat, and sub are exposed."
+  - id: "rfc6750-error-response-realm-should-be-included"
+    title: "WWW-Authenticate challenge SHOULD include a realm parameter"
+    standard_refs:
+      - "RFC6750"
+    surface: "sdk-verifier.error-response"
+    priority: "medium"
+    requirement_summary: "RFC 6750 §3 permits (MAY) a realm attribute in a Bearer challenge. This profile upgrades that to\
+      \ a SHOULD: when the SDK builds an error response with a known resource URI, the WWW-Authenticate header SHOULD contain\
+      \ a realm parameter identifying the protected resource."
+    setup:
+      realm: "https://api.example.com"
+      error_scenarios:
+        - error: "token_expired"
+          expected_scheme: "Bearer"
+        - error: "dpop_invalid"
+          expected_scheme: "DPoP"
+    stimulus:
+      operation: "build_error_response with realm"
+    expected:
+      outcome: "accept"
+      www_authenticate_contains: "realm="
+    rationale: "The realm parameter helps clients identify which resource requires authentication. RFC 6750 §3 permits it\
+      \ (MAY) and RFC 2617 §1.2 defines its semantics; this profile upgrades inclusion to a SHOULD whenever a resource URI\
+      \ is known."
+  - id: "rfc9449-dpop-grant-token-type-must-be-dpop"
+    title: "Reject token response with non-DPoP token_type when DPoP proof was sent"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.token-response-parsing"
+    priority: "high"
+    requirement_summary: "When a DPoP proof was sent with the token request, the response token_type MUST be DPoP (case-insensitive).\
+      \ A Bearer token_type indicates the AS ignored DPoP and the token is not sender-constrained."
+    setup:
+      dpop_enabled: true
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "tok"
+          token_type: "Bearer"
+    stimulus:
+      operation: "client_credentials with DPoP"
+    expected:
+      outcome: "reject"
+      error_category: "protocol_error"
+      error_hint: "token_type"
+    rationale: "RFC 9449 §5 requires token_type DPoP for sender-constrained responses. Accepting Bearer when DPoP was used\
+      \ creates a confused deputy — the client believes the token is sender-constrained when it is not."
+  - id: "rfc9449-dpop-proof-htu-must-strip-query-and-fragment"
+    title: "Client-generated DPoP proof htu must exclude query and fragment parts"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-client.dpop-proof-generation"
+    priority: "high"
+    requirement_summary: "RFC 9449 §4.3 requires the htu claim to be set to the HTTP request target URI excluding the query\
+      \ and fragment parts. The client-side proof generator MUST strip these components before setting the claim."
+    setup:
+      dpop_proof_request:
+        method: "GET"
+        url: "https://api.example.com/resource?page=1&size=10#section"
+    stimulus:
+      operation: "generate_dpop_proof"
+    expected:
+      outcome: "accept"
+      proof_claims:
+        htu: "https://api.example.com/resource"
+    rationale: "Including query or fragment in htu causes interoperability failures with resource servers that perform URL\
+      \ comparison per the RFC. The server-side validator already strips these; the client must not include them."
+  - id: "rfc6750-error-response-must-map-error-codes"
+    title: "WWW-Authenticate helper must map SDK errors to RFC 6750 §3 error codes"
+    standard_refs:
+      - "RFC6750"
+      - "RFC9068"
+    surface: "sdk-verifier.error-response"
+    priority: "high"
+    requirement_summary: "RFC 9068 §4 requires resource servers to handle errors as described in RFC 6750 §3.1. The SDK MUST\
+      \ provide a helper that maps authentication errors to 'invalid_token' and authorization errors to 'insufficient_scope'\
+      \ in a WWW-Authenticate header value."
+    setup:
+      error_scenarios:
+        - error_type: "token_expired"
+          expected_error_code: "invalid_token"
+          expected_scheme: "Bearer"
+        - error_type: "invalid_signature"
+          expected_error_code: "invalid_token"
+          expected_scheme: "Bearer"
+        - error_type: "insufficient_scope"
+          expected_error_code: "insufficient_scope"
+          expected_scheme: "Bearer"
+        - error_type: "dpop_error"
+          expected_error_code: "invalid_token"
+          expected_scheme: "DPoP"
+    stimulus:
+      operation: "www_authenticate(error)"
+    expected:
+      outcome: "accept"
+      www_authenticate_format: "<scheme> error=\"<error_code>\", error_description=\"<message>\""
+    rationale: "RFC 9068 §4 delegates error handling to RFC 6750 §3 which mandates specific error codes in WWW-Authenticate\
+      \ challenges. Without an SDK helper, every adapter must reimplement this mapping, risking inconsistency."
+  - id: "rfc9728-prm-dpop-fields-should-be-advertised-when-dpop-is-supported"
+    title: "PRM should advertise DPoP signing algorithms and binding requirement when DPoP is configured"
+    standard_refs:
+      - "RFC9728"
+      - "RFC9449"
+    surface: "sdk-resource-metadata"
+    priority: "medium"
+    requirement_summary: "RFC 9728 §2 defines dpop_signing_alg_values_supported and dpop_bound_access_tokens_required metadata\
+      \ fields. When the SDK supports DPoP, the PRM generator SHOULD include these fields."
+    setup:
+      issuer: "https://auth.example.com"
+      resource: "https://api.example.com"
+      scopes:
+        - "read:data"
+      dpop_signing_alg_values_supported:
+        - "ES256"
+        - "RS256"
+    stimulus:
+      operation: "build_prm with dpop_algs"
+    expected:
+      outcome: "accept"
+      result_contains:
+        - "dpop_signing_alg_values_supported"
+    rationale: "Clients and authorization servers use PRM to discover DPoP requirements. Omitting DPoP fields when DPoP is\
+      \ supported leads to interoperability failures."
+  - id: "rfc9728-prm-must-advertise-dpop-required-when-resource-requires-dpop"
+    title: "PRM must advertise dpop_bound_access_tokens_required=true when resource requires DPoP"
+    standard_refs:
+      - "RFC9728"
+      - "RFC9449"
+    surface: "sdk-resource-metadata"
+    priority: "high"
+    requirement_summary: "When the resource is configured to require DPoP-bound access tokens, the PRM MUST advertise dpop_bound_access_tokens_required=true\
+      \ so clients can discover the requirement before presenting tokens (RFC 9728 §2)."
+    setup:
+      issuer: "https://auth.example.com"
+      resource: "https://api.example.com"
+      scopes:
+        - "read:data"
+      dpop_signing_alg_values_supported:
+        - "ES256"
+        - "RS256"
+      dpop_bound_access_tokens_required: true
+    stimulus:
+      operation: "build_prm"
+    expected:
+      outcome: "accept"
+      result_shape:
+        dpop_bound_access_tokens_required: true
+    rationale: "If the resource enforces DPoP at verify time but does not advertise the requirement in PRM, clients cannot\
+      \ discover the policy and may present bearer-only tokens that are silently rejected. This bridges PRM advertising with\
+      \ verifier enforcement."
+  - id: "rfc9449-verifier-must-reject-bearer-only-token-when-resource-requires-dpop"
+    title: "Reject bearer-only access tokens at verify time when the resource is configured to require DPoP"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9728"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "When the resource is configured with dpop_bound_access_tokens_required=true, the verifier MUST reject\
+      \ access tokens that lack a cnf.jkt binding, even if the AS issued an otherwise-valid bearer token."
+    setup:
+      resource_dpop_bound_access_tokens_required: true
+      access_token_claims:
+        sub: "user123"
+        iss: "https://auth.example.com"
+        aud: "https://api.example.com"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_binding_mismatch"
+    rationale: "Without rejecting bearer-only tokens at verify time, a misissued or mis-routed bearer token would silently\
+      \ bypass the resource's stated sender-binding requirement, defeating the purpose of advertising dpop_bound_access_tokens_required=true."
+  - id: "rfc9449-verifier-must-reject-dpop-bound-token-when-resource-does-not-support-dpop"
+    title: "Reject DPoP-bound access tokens at verify time when the resource does not support DPoP"
+    standard_refs:
+      - "RFC9449"
+      - "RFC9728"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "critical"
+    requirement_summary: "When the resource is not configured to support DPoP (no dpop_signing_alg_values_supported in PRM),\
+      \ the verifier MUST reject access tokens that carry a cnf.jkt binding. RFC 9449 §6 scopes proof-validation duties to\
+      \ resource servers supporting DPoP; a resource that has not opted in cannot validate the binding consistently."
+    setup:
+      resource_supports_dpop: false
+      access_token_claims:
+        sub: "user123"
+        iss: "https://auth.example.com"
+        aud: "https://api.example.com"
+        cnf:
+          jkt: "any-thumbprint"
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_not_supported"
+    rationale: "Silently accepting a DPoP-bound token at a non-supporting resource either drops sender-binding (treating it\
+      \ as bearer) or applies an undisclosed validation policy. Both undermine the contract advertised in PRM. Failing closed\
+      \ forces the resource to opt in explicitly before honoring DPoP semantics."
+  - id: "rfc9449-verifier-must-reject-dpop-proof-when-access-token-is-not-dpop-bound"
+    title: "Reject DPoP proof presented with a bearer-only access token"
+    standard_refs:
+      - "RFC9449"
+    surface: "sdk-verifier.dpop.inbound"
+    priority: "high"
+    requirement_summary: "When a request presents a DPoP proof but the access token has no cnf.jkt, the verifier MUST reject\
+      \ the request. RFC 9449 §7 binds proofs to DPoP-bound access tokens via the ath claim; a proof without a bound token\
+      \ is a malformed request shape regardless of whether the resource supports DPoP."
+    setup:
+      access_token_claims:
+        sub: "user123"
+        iss: "https://auth.example.com"
+        aud: "https://api.example.com"
+      dpop_proof_present: true
+    stimulus:
+      operation: "verifier.verify"
+    expected:
+      outcome: "reject"
+      error_category: "dpop_binding_mismatch"
+    rationale: "Silently ignoring an unmatched proof masks client/AS bugs (e.g. AS issued a non-bound token for a DPoP flow,\
+      \ or client attached a stale proof) and prevents resource servers from surfacing actionable errors."
+  - id: "rfc8693-token-exchange-response-must-contain-issued-token-type"
+    title: "Reject token exchange responses that omit issued_token_type"
+    standard_refs:
+      - "RFC8693"
+    surface: "sdk-client.token-exchange"
+    priority: "medium"
+    requirement_summary: "RFC 8693 §2.2.1 states the authorization server MUST indicate the type of token issued via issued_token_type.\
+      \ The SDK SHOULD reject exchange responses that omit this required field."
+    setup:
+      token_endpoint_response:
+        status_code: 200
+        body:
+          access_token: "exchanged_token"
+          token_type: "Bearer"
+    stimulus:
+      operation: "parse_token_response with allow_issued_token_type=True"
+    expected:
+      outcome: "reject"
+      error_category: "protocol_error"
+      error_hint: "issued_token_type"
+    rationale: "issued_token_type is the only mechanism for the client to know what kind of token it received from an exchange.\
+      \ Silently accepting its absence masks AS non-compliance."
+
+usage_guidance:
+  unit_test_translation:
+    - "Treat each case id as a stable language-neutral test identifier."
+    - "Implement setup/stimulus/expected as table-driven unit tests where practical."
+    - "Preserve error-category semantics even if exception class names differ by language."
+    - "Keep protocol conformance cases separate from SDK-only resilience cases such as SSRF, caching policy internals, and\
+      \ circuit breakers."
+  suite_execution:
+    - "Each SDK implementation should translate this catalog into native tests in its own repository."
+    - "Running the translated conformance suite should generate a machine-readable report in that SDK's root folder."
+    - "Recommended report filenames are `conformance-report.yaml`, `conformance-report.json`, or `junit.xml`."
+    - "The report should include at least: catalog_version, implementation name/version, execution timestamp, case ids, per-case\
+      \ status, and failure details when applicable."

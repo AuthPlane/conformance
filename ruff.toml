@@ -1,0 +1,11 @@
+# ruff config for tooling scripts in this repo.
+#
+# The catalog itself (oauth-sdk-conformance-catalog.yaml) is the primary
+# artifact; the Python under scripts/ exists only to validate it.  Any SDK
+# consumer that clones this repo into their workspace and runs their own
+# linter (e.g. AuthPlane/python-sdk's CI does ``ruff format --check .``
+# from a workspace that includes this repo) needs a consistent format
+# decision here, otherwise their CI breaks on incidental drift.
+#
+# 100 matches the line-length used by AuthPlane SDKs.
+line-length = 100

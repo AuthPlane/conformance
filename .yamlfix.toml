@@ -1,0 +1,5 @@
+line_length = 120
+section_whitelines = 1
+comments_whitelines = 1
+preserve_quotes = true
+sequence_style = "block_style"

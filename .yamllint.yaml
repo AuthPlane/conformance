@@ -1,0 +1,17 @@
+---
+extends: default
+
+rules:
+  # Long rationale prose is natural; no value in enforcing a column limit.
+  line-length: disable
+  # yamlfix emits "---" at the top of YAML documents; accept it.
+  document-start: enable
+  truthy:
+    check-keys: false
+  indentation:
+    spaces: 2
+    indent-sequences: true
+
+ignore: |-
+  .git/
+  .venv/
