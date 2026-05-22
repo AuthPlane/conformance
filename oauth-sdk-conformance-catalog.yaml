@@ -1836,6 +1836,31 @@ cases:
       error_category: "invalid_dpop_proof"
       error_hint: "ath"
     rationale: "ath binds the proof to the specific access token and prevents proof reuse across tokens."
+  - id: "rfc9449-introspection-response-must-expose-cnf-jkt"
+    title: "Expose the top-level cnf.jkt confirmation from an RFC 7662 introspection response"
+    standard_refs:
+      - "RFC9449"
+      - "RFC7662"
+    surface: "sdk-client.introspection"
+    priority: "high"
+    requirement_summary: "When an RFC 7662 introspection response carries a top-level cnf object with a jkt member,\
+      \ the SDK introspection result type MUST expose that thumbprint to callers."
+    setup:
+      introspection_response:
+        active: true
+        cnf:
+          jkt: "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+    stimulus:
+      operation: "introspect_token"
+    expected:
+      outcome: "accept"
+      result_shape:
+        active: true
+        cnf:
+          jkt: "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"
+    rationale: "RFC 9449 §6.2 places the DPoP key confirmation at the top level of the introspection response. SDKs\
+      \ that hide this thumbprint force every consumer to reach into the raw map and re-implement parsing, defeating\
+      \ the purpose of the typed introspection result."
   - id: "rfc9449-dpop-bound-token-must-contain-cnf-jkt"
     title: "Reject DPoP validation attempts when the access token lacks cnf.jkt"
     standard_refs:
