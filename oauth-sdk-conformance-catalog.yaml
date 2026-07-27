@@ -2098,6 +2098,7 @@ cases:
     standard_refs:
       - "RFC6750"
       - "RFC9068"
+      - "RFC9449"
     surface: "sdk-verifier.error-response"
     priority: "high"
     requirement_summary: "RFC 9068 §4 requires resource servers to handle errors as described in RFC 6750 §3.1. The SDK MUST\
@@ -2117,13 +2118,18 @@ cases:
         - error_type: "dpop_error"
           expected_error_code: "invalid_token"
           expected_scheme: "DPoP"
+        - error_type: "dpop_multi_header"
+          expected_error_code: "invalid_dpop_proof"
+          expected_scheme: "DPoP"
     stimulus:
       operation: "www_authenticate(error)"
     expected:
       outcome: "accept"
       www_authenticate_format: "<scheme> error=\"<error_code>\", error_description=\"<message>\""
     rationale: "RFC 9068 §4 delegates error handling to RFC 6750 §3 which mandates specific error codes in WWW-Authenticate\
-      \ challenges. Without an SDK helper, every adapter must reimplement this mapping, risking inconsistency."
+      \ challenges. Without an SDK helper, every adapter must reimplement this mapping, risking inconsistency. The RFC 9449\
+      \ §4.3 multi-header rejection is the one DPoP carve-out: §7.1 prescribes invalid_dpop_proof for it, while the other\
+      \ DPoP proof failures stay on invalid_token."
   - id: "rfc9728-prm-dpop-fields-should-be-advertised-when-dpop-is-supported"
     title: "PRM should advertise DPoP signing algorithms and binding requirement when DPoP is configured"
     standard_refs:
