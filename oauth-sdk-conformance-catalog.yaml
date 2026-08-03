@@ -124,6 +124,12 @@ cases:
       metadata_document:
         issuer: "https://evil.example.com"
         jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+      variants:
+        - configured_issuer: "https://auth.example.com"
+          metadata_document:
+            issuer: "https://auth.example.com/"
+            jwks_uri: "https://auth.example.com/.well-known/jwks.json"
+          expected_outcome: "reject"
     stimulus:
       operation: "client.create"
     expected:
@@ -766,6 +772,11 @@ cases:
     setup:
       token_claims:
         iss: "https://wrong-issuer.com"
+      variants:
+        - configured_issuer: "https://auth.example.com/"
+          token_claims:
+            iss: "https://auth.example.com/"
+          expected_outcome: "accept"
     stimulus:
       operation: "verifier.verify"
     expected:
@@ -1365,12 +1376,14 @@ cases:
     surface: "sdk-resource-metadata"
     priority: "medium"
     requirement_summary: "The well-known URI MUST be formed by inserting /.well-known/oauth-protected-resource between the\
-      \ host and path component of the resource URI."
+      \ host and path component of the resource URI. Trailing slashes on the resource path are dropped, so identifiers differing\
+      \ only by a trailing slash resolve to the same metadata document."
     setup:
       resources:
         - "https://api.example.com"
         - "https://api.example.com/mcp"
         - "https://api.example.com/v2/mcp"
+        - "https://api.example.com/mcp/"
     stimulus:
       operation: "well_known_prm_path"
     expected:
@@ -1379,7 +1392,9 @@ cases:
         "https://api.example.com": "/.well-known/oauth-protected-resource"
         "https://api.example.com/mcp": "/.well-known/oauth-protected-resource/mcp"
         "https://api.example.com/v2/mcp": "/.well-known/oauth-protected-resource/v2/mcp"
-    rationale: "Ensures clients can correctly discover PRM documents for resources with or without path components."
+        "https://api.example.com/mcp/": "/.well-known/oauth-protected-resource/mcp"
+    rationale: "Ensures clients can correctly discover PRM documents for resources with or without path components. A resource\
+      \ published with a trailing slash serves its metadata at the slash-less well-known path."
   - id: "rfc8414-introspection-endpoint-required-when-introspection-is-used"
     title: "Require introspection_endpoint when introspection operations are invoked"
     standard_refs:
