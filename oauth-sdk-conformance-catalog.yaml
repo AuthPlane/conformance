@@ -2121,6 +2121,9 @@ cases:
         - error_type: "dpop_multi_header"
           expected_error_code: "invalid_dpop_proof"
           expected_scheme: "DPoP"
+        - error_type: "dpop_not_supported"
+          expected_error_code: "invalid_token"
+          expected_scheme: "Bearer"
     stimulus:
       operation: "www_authenticate(error)"
     expected:
@@ -2129,7 +2132,8 @@ cases:
     rationale: "RFC 9068 §4 delegates error handling to RFC 6750 §3 which mandates specific error codes in WWW-Authenticate\
       \ challenges. Without an SDK helper, every adapter must reimplement this mapping, risking inconsistency. The RFC 9449\
       \ §4.3 multi-header rejection is the one DPoP carve-out: §7.1 prescribes invalid_dpop_proof for it, while the other\
-      \ DPoP proof failures stay on invalid_token."
+      \ DPoP proof failures stay on invalid_token. DPoPNotSupported is the inverse case: the resource is bearer-only, so its\
+      \ challenge uses the Bearer scheme with invalid_token rather than DPoP."
   - id: "rfc9728-prm-dpop-fields-should-be-advertised-when-dpop-is-supported"
     title: "PRM should advertise DPoP signing algorithms and binding requirement when DPoP is configured"
     standard_refs:
