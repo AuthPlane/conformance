@@ -1,7 +1,7 @@
 ---
 schema_version: "1.0"
 catalog_id: "oauth-sdk-conformance-catalog"
-catalog_version: "2026-04-22"
+catalog_version: "2026-08-04"
 
 source_baseline:
   intent: "Language-neutral OAuth SDK conformance catalog shared across SDK implementations."
@@ -2098,11 +2098,12 @@ cases:
     standard_refs:
       - "RFC6750"
       - "RFC9068"
+      - "RFC9449"
     surface: "sdk-verifier.error-response"
     priority: "high"
     requirement_summary: "RFC 9068 §4 requires resource servers to handle errors as described in RFC 6750 §3.1. The SDK MUST\
-      \ provide a helper that maps authentication errors to 'invalid_token' and authorization errors to 'insufficient_scope'\
-      \ in a WWW-Authenticate header value."
+      \ provide a helper that maps authentication errors to 'invalid_token', authorization errors to 'insufficient_scope',\
+      \ and a DPoP proof deemed invalid under RFC 9449 §4.3 to 'invalid_dpop_proof' in a WWW-Authenticate header value."
     setup:
       error_scenarios:
         - error_type: "token_expired"
@@ -2117,13 +2118,22 @@ cases:
         - error_type: "dpop_error"
           expected_error_code: "invalid_token"
           expected_scheme: "DPoP"
+        - error_type: "dpop_multi_header"
+          expected_error_code: "invalid_dpop_proof"
+          expected_scheme: "DPoP"
+        - error_type: "dpop_not_supported"
+          expected_error_code: "invalid_token"
+          expected_scheme: "Bearer"
     stimulus:
       operation: "www_authenticate(error)"
     expected:
       outcome: "accept"
       www_authenticate_format: "<scheme> error=\"<error_code>\", error_description=\"<message>\""
     rationale: "RFC 9068 §4 delegates error handling to RFC 6750 §3 which mandates specific error codes in WWW-Authenticate\
-      \ challenges. Without an SDK helper, every adapter must reimplement this mapping, risking inconsistency."
+      \ challenges. Without an SDK helper, every adapter must reimplement this mapping, risking inconsistency. RFC 9449 §7.1\
+      \ designates invalid_dpop_proof for a proof deemed invalid under the §4.3 criteria; the dpop_multi_header row profiles\
+      \ that designation for the §4.3 item 1 cardinality rejection. dpop_not_supported is the inverse case: the resource is\
+      \ bearer-only, so its challenge uses the Bearer scheme with invalid_token rather than DPoP."
   - id: "rfc9728-prm-dpop-fields-should-be-advertised-when-dpop-is-supported"
     title: "PRM should advertise DPoP signing algorithms and binding requirement when DPoP is configured"
     standard_refs:
