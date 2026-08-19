@@ -1,7 +1,7 @@
 ---
 schema_version: "1.0"
 catalog_id: "oauth-sdk-conformance-catalog"
-catalog_version: "2026-08-04"
+catalog_version: "2026-08-19"
 
 source_baseline:
   intent: "Language-neutral OAuth SDK conformance catalog shared across SDK implementations."
@@ -1472,27 +1472,56 @@ cases:
       error_category: "metadata_or_transport_failure"
     rationale: "Discovery metadata should not downgrade revocation endpoint transport."
   - id: "rfc8414-jwks-uri-rotation-must-reconfigure-jwks-cache"
-    title: "Reconfigure JWKS resolution when metadata jwks_uri changes"
+    title: "Follow a metadata jwks_uri rotation using only ordinary verification traffic"
     standard_refs:
       - "RFC8414"
       - "RFC8725"
-    surface: "sdk-client.discovery"
+    surface: "sdk-verifier.jwks"
     priority: "medium"
-    requirement_summary: "When trusted metadata changes jwks_uri, the SDK SHOULD rebind JWKS fetching to the new URI."
+    requirement_summary: "RFC 8414 makes the metadata document the published location of jwks_uri and specifies no refresh\
+      \ cadence; this profile supplies the cadence. A verifier SHOULD re-read metadata on its configured refresh interval\
+      \ and rebind JWKS fetching to the rotated jwks_uri. Following the rotation MUST require nothing beyond ordinary verification\
+      \ traffic: no force-refresh argument, no test-only hook, and no reflective access to internals."
     setup:
+      metadata_refresh_interval: "the SDK's configured metadata refresh interval, shortened for the test"
       old_metadata:
         issuer: "https://auth.example.com"
         jwks_uri: "https://auth.example.com/jwks-v1.json"
       new_metadata:
         issuer: "https://auth.example.com"
         jwks_uri: "https://auth.example.com/jwks-v2.json"
+      rotation_sequence:
+        - "verifier is built through public API against old_metadata and verifies a token signed by a jwks-v1 key"
+        - "AS begins serving new_metadata; jwks-v1.json is withdrawn or serves only retired keys"
+        - "the new signing key is published at jwks-v2.json only"
     stimulus:
-      operation: "client._on_metadata_changed"
+      operation: "verifier.verify, repeated as ordinary traffic spanning the metadata refresh interval"
+      prohibited_mechanisms:
+        - "force-refresh or any other cache-invalidating argument on a public call"
+        - "test-only hooks, package-private methods, or reflection into cache internals"
+        - "direct mutation or reconstruction of the metadata or JWKS cache"
+        - "asserting on locally built metadata objects without driving the verifier"
     expected:
       outcome: "accept"
+      bound: "a token signed by the jwks-v2-only key verifies within two metadata refresh intervals of the rotation"
       side_effect:
-        - "jwks_uri updated to new metadata value"
-    rationale: "Keeps key discovery aligned with metadata rotation without requiring client recreation."
+        - "metadata re-fetched after the refresh interval elapses, without an explicit refresh call"
+        - "JWKS fetched from new_metadata.jwks_uri"
+        - "no further fetch of the withdrawn jwks-v1.json once the rebind has happened"
+    notes:
+      - "Distinct from rfc8725-kid-must-resolve-through-jwks-with-single-refresh-on-miss, which refetches the same jwks_uri\
+        \ after an unknown kid. Here the URI itself must be re-read from metadata, so a verifier that only refreshes keys\
+        \ from a URI captured at construction fails this case while still passing that one."
+      - "An SDK that reads metadata once at construction and never re-reads it cannot satisfy this case. Report it as failed,\
+        \ or as skipped with the reason, rather than reaching the rotation through a non-public path."
+    rationale: "Keeps key discovery aligned with metadata rotation without requiring client recreation. RFC 8414 section 2\
+      \ defines jwks_uri as the URL of the JWK Set holding the signing keys used to validate the authorization server's signatures,\
+      \ and section 3 requires that document to be published at the well-known location derived from the issuer identifier\
+      \ - the current jwks_uri lives in metadata, not in a value captured once at construction. RFC 8414 imposes no re-fetch\
+      \ cadence, so the bound comes from the SDK's own metadata refresh-interval contract. The mechanism restriction is the\
+      \ substance of the case: a verify-only resource server never repeats client-side discovery, so a rotation is followed\
+      \ only if ordinary verification traffic re-reads metadata. Satisfying the case through a force-refresh argument, a test-only\
+      \ hook, or reflection proves nothing about that path and lets the defect ship."
   - id: "rfc7009-revocation-server-errors-must-surface"
     title: "Surface revocation endpoint server errors as failures"
     standard_refs:
