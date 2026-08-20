@@ -1,7 +1,7 @@
 ---
 schema_version: "1.0"
 catalog_id: "oauth-sdk-conformance-catalog"
-catalog_version: "2026-08-20"
+catalog_version: "2026-08-21"
 
 source_baseline:
   intent: "Language-neutral OAuth SDK conformance catalog shared across SDK implementations."
@@ -1399,6 +1399,55 @@ cases:
         \ derivation is reached - see rfc8707-resource-indicator-must-not-contain-a-fragment."
     rationale: "Ensures clients can correctly discover PRM documents for resources with or without path components. A resource\
       \ published with a trailing slash serves its metadata at the slash-less well-known path."
+  - id: "rfc9728-well-known-url-must-preserve-the-resource-query-component"
+    title: "Preserve the resource identifier's query component in the derived well-known PRM URL"
+    standard_refs:
+      - "RFC9728"
+      - "RFC8707"
+    surface: "sdk-resource-metadata"
+    priority: "high"
+    requirement_summary: "When a resource identifier carries a query component, the derived well-known PRM URL MUST retain\
+      \ that query. RFC 9728 section 3 inserts the well-known URI string between the host component and the path and/or query\
+      \ components, so two identifiers differing only by their query MUST NOT collapse onto one metadata document URL."
+    setup:
+      resources:
+        - "https://api.example.com/mcp?tenant=a"
+        - "https://api.example.com/mcp?tenant=b"
+        - "https://api.example.com?x=1"
+    stimulus:
+      operation: "well_known_prm_url"
+    expected:
+      outcome: "accept"
+      result_shape:
+        "https://api.example.com/mcp?tenant=a": "https://api.example.com/.well-known/oauth-protected-resource/mcp?tenant=a"
+        "https://api.example.com/mcp?tenant=b": "https://api.example.com/.well-known/oauth-protected-resource/mcp?tenant=b"
+        "https://api.example.com?x=1": "https://api.example.com/.well-known/oauth-protected-resource?x=1"
+    notes:
+      - "The stimulus is the full derived URL rather than the path alone, because a path-only accessor cannot express a query.\
+        \ rfc9728-well-known-path-must-derive-from-resource-uri stays path-only and unchanged: SDKs report against case ids,\
+        \ so widening that case would silently change what a passing report means."
+      - "A query component is legal in a resource identifier and must be preserved, not stripped and not rejected. RFC 8707\
+        \ section 2 says of the resource parameter that 'It SHOULD NOT include a query component, but it is recognized that\
+        \ there are cases that make a query component a useful and necessary part of the resource parameter, such as when\
+        \ one or more query parameters are used to scope requests to an application'. RFC 9728 section 1.2 carries the same\
+        \ carve-out forward for the resource identifier, citing RFC 8707 section 2. The exception is stated in the same breath\
+        \ as the SHOULD NOT, so this is not an RFC 9728 override of an RFC 8707 prohibition - neither document ever prohibits\
+        \ the query, and neither licenses normalizing it away."
+      - "The third resource has no path and no terminating slash, so section 3.1 has no slash to remove and the suffix is\
+        \ inserted directly after the host, with the query following it. That same sentence is what makes 'https://api.example.com/?x=1'\
+        \ derive this identical URL, since there the terminating slash is removed first."
+    rationale: "RFC 9728 section 3 requires the metadata document to be published 'at a URL formed by inserting a well-known\
+      \ URI string into the protected resource's resource identifier between the host component and the path and/or query\
+      \ components, if any'. Section 3.1 repeats the placement when it describes removing the terminating slash: the suffix\
+      \ goes 'between the host component and the path and/or query components'. A derivation that drops the query therefore\
+      \ builds the wrong URL. The harm is not cosmetic. Query parameters scope requests to an application, which is the multi-tenant\
+      \ case RFC 8707 section 2 names explicitly, so dropping the query makes every tenant on a host resolve to one document\
+      \ - a client asking for tenant a's metadata is served tenant b's, and the response looks entirely successful. It also\
+      \ fails closed on the client only by luck: RFC 9728 section 3.3 requires that 'The resource value returned MUST be identical\
+      \ to the protected resource's resource identifier value into which the well-known URI path suffix was inserted to create\
+      \ the URL used to retrieve the metadata. If these values are not identical, the data contained in the response MUST\
+      \ NOT be used.' A server that drops the query when routing but publishes the configured identifier verbatim serves a\
+      \ document the client must discard, with a 200 status, no error, and no server-side signal."
   - id: "rfc8707-resource-indicator-must-not-contain-a-fragment"
     title: "Reject a resource indicator that carries a URI fragment when the resource is constructed"
     standard_refs:
@@ -1433,6 +1482,65 @@ cases:
       \ identical, the data contained in the response MUST NOT be used'. The client therefore discards the document. The server\
       \ logged nothing, returned no error, and served a 200 - a silent interop failure with no server-side signal, which is\
       \ exactly what a construction-time rejection converts into an immediate, attributable configuration error."
+  - id: "rfc9728-resource-identifier-must-be-an-absolute-url-with-scheme-and-host"
+    title: "Reject a resource identifier that is not an absolute URL with a scheme and a host"
+    standard_refs:
+      - "RFC9728"
+      - "RFC8707"
+      - "RFC3986"
+      - "RFC6750"
+    surface: "sdk-resource-metadata"
+    priority: "high"
+    requirement_summary: "A resource identifier MUST be an absolute URL carrying both a scheme and a host. A relative reference,\
+      \ or a scheme-relative reference that supplies a host but no scheme, MUST be rejected at the point the resource is constructed."
+    setup:
+      resources:
+        - "/mcp"
+        - "//api.example.com/mcp"
+    stimulus:
+      operation: "resource.create"
+    expected:
+      outcome: "reject"
+      error_category: "validation_error"
+      error_hint: "resource identifier must be an absolute URL with a scheme and a host"
+    notes:
+      - "Each value in resources is exercised independently and each must reject on its own; the case is not satisfied by\
+        \ rejecting one of the two."
+      - "The two values are not redundant. A scheme-relative reference still parses with a non-empty authority, so a guard\
+        \ that only asks whether the identifier is opaque or authority-less accepts it while correctly rejecting the plain\
+        \ relative form. The scheme is the component missing from both, and it is the one that must be checked. An implementation\
+        \ that rejects '/mcp' alone has not necessarily satisfied this case."
+      - "The scheme need not be https. An identifier is acceptable on scheme-and-host grounds whenever both components are\
+        \ present, so 'http://localhost:8080/mcp' MUST still be accepted - local development loops depend on it. RFC 9728\
+        \ section 1.2 does define the resource identifier as a URL that uses the https scheme, and an SDK is free to add a\
+        \ separate https policy with its own escape hatch for loopback hosts, but that is a different requirement and this\
+        \ case neither tests it nor licenses turning this check into an https-only check."
+      - "Opaque identifiers such as 'urn:example:api' are deliberately out of scope. Such a value has a scheme but no host,\
+        \ so it falls in the gap between the two requirements this case draws on, and whether an opaque identifier used purely\
+        \ for RFC 8707 audience binding may be accepted is an open question the SDKs have not settled - at least one accepts\
+        \ it by design and documents why. This case takes no position on it: it forbids only identifiers that supply no scheme\
+        \ at all, and its 'reject' outcome must not be read as covering the opaque case."
+      - "Distinct from rfc8707-resource-indicator-must-not-contain-a-fragment, which rejects a different malformation at the\
+        \ same construction gate, and from rfc9728-well-known-url-must-preserve-the-resource-query-component, which governs\
+        \ derivation for an already-valid identifier."
+    rationale: "Two requirements combine. RFC 8707 section 2 says the resource parameter's 'value MUST be an absolute URI,\
+      \ as specified by Section 4.3 of [RFC3986]', and that grammar is 'absolute-URI = scheme \":\" hier-part [ \"?\" query\
+      \ ]' - a scheme is mandatory, which disqualifies both a relative reference and a scheme-relative one. The host comes\
+      \ from RFC 9728 section 3, which publishes metadata 'at a URL formed by inserting a well-known URI string into the protected\
+      \ resource's resource identifier between the host component and the path and/or query components, if any'. That construction\
+      \ presupposes a host component to insert after; an identifier without one has no derivable origin, so there is no well-known\
+      \ URL to form. The concrete harm is that the failure surfaces late and silently rather than at configuration time. An\
+      \ identifier with no derivable origin has no scheme and no authority to substitute into the origin string that the SDKs\
+      \ concatenate, so it yields values such as a bare '://' where the scheme and host belong, or a literal 'null://null'\
+      \ origin, and where the identifier is concatenated onto the well-known prefix instead it yields a scheme-less, host-less\
+      \ '/.well-known/...' value. Those reach the resource_metadata parameter that RFC 9728 section 5.1 adds to the RFC 6750\
+      \ WWW-Authenticate challenge. A client that receives one cannot fetch the document, and RFC 9728 section 3.3 leaves\
+      \ it no recovery path, since the identity check it is required to run can never succeed. The same origin string is also\
+      \ the source of the DPoP htu in MCP adapters that re-anchor the request URL onto the configured resource, where the\
+      \ origin is deliberately taken from operator configuration rather than from inbound Host or X-Forwarded-Proto headers,\
+      \ precisely so an upstream cannot choose which htu a proof is checked against. A malformed identifier yields a malformed\
+      \ htu and defeats that guarantee. Rejecting at construction converts every one of these into an immediate, attributable\
+      \ configuration error."
   - id: "rfc8414-introspection-endpoint-required-when-introspection-is-used"
     title: "Require introspection_endpoint when introspection operations are invoked"
     standard_refs:
