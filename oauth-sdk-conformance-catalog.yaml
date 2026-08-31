@@ -1,7 +1,7 @@
 ---
 schema_version: "1.0"
 catalog_id: "oauth-sdk-conformance-catalog"
-catalog_version: "2026-08-19"
+catalog_version: "2026-08-20"
 
 source_baseline:
   intent: "Language-neutral OAuth SDK conformance catalog shared across SDK implementations."
@@ -1393,8 +1393,46 @@ cases:
         "https://api.example.com/mcp": "/.well-known/oauth-protected-resource/mcp"
         "https://api.example.com/v2/mcp": "/.well-known/oauth-protected-resource/v2/mcp"
         "https://api.example.com/mcp/": "/.well-known/oauth-protected-resource/mcp"
+    notes:
+      - "Every resource listed here is already a valid resource identifier. Dropping a trailing slash is a path-normalization\
+        \ step defined for the well-known path; it is not license to normalize away a fragment. A fragment is rejected before\
+        \ derivation is reached - see rfc8707-resource-indicator-must-not-contain-a-fragment."
     rationale: "Ensures clients can correctly discover PRM documents for resources with or without path components. A resource\
       \ published with a trailing slash serves its metadata at the slash-less well-known path."
+  - id: "rfc8707-resource-indicator-must-not-contain-a-fragment"
+    title: "Reject a resource indicator that carries a URI fragment when the resource is constructed"
+    standard_refs:
+      - "RFC8707"
+      - "RFC9728"
+    surface: "sdk-resource-metadata"
+    priority: "high"
+    requirement_summary: "A resource identifier MUST NOT carry a fragment component. The SDK MUST reject such a value at the\
+      \ point the resource is constructed. Accepting it and stripping the fragment later, while deriving the well-known metadata\
+      \ URL, does not satisfy this requirement."
+    setup:
+      resource: "https://api.example.com/mcp#section"
+    stimulus:
+      operation: "resource.create"
+    expected:
+      outcome: "reject"
+      error_category: "validation_error"
+      error_hint: "resource identifier must not contain a fragment"
+    notes:
+      - "Rejection must be observable from the constructor call itself. An SDK that returns a resource object and only fails\
+        \ later - or never fails, because the fragment was silently dropped - does not pass this case."
+      - "Distinct from rfc9728-well-known-path-must-derive-from-resource-uri, which governs how an already-valid resource\
+        \ identifier maps onto its well-known path. A fragment never reaches that derivation."
+    rationale: "Two independent, unconditional requirements forbid the fragment, so no configuration makes such a value acceptable.\
+      \ RFC 8707 section 2 states of the resource parameter that 'The URI MUST NOT include a fragment component', and RFC\
+      \ 9728 section 1.2 defines the resource identifier as a URL that uses the https scheme and has no fragment component.\
+      \ The reason the gate belongs at construction rather than at derivation is that stripping is worse than rejecting. An\
+      \ implementation that drops the fragment when building the well-known URL, while publishing the configured identifier\
+      \ verbatim in the metadata document's resource field, emits a document whose resource value differs from the identifier\
+      \ the client derived that URL from. RFC 9728 section 3.3 requires the returned resource value to be identical to the\
+      \ resource identifier into which the well-known URI path suffix was inserted, and adds that 'If these values are not\
+      \ identical, the data contained in the response MUST NOT be used'. The client therefore discards the document. The server\
+      \ logged nothing, returned no error, and served a 200 - a silent interop failure with no server-side signal, which is\
+      \ exactly what a construction-time rejection converts into an immediate, attributable configuration error."
   - id: "rfc8414-introspection-endpoint-required-when-introspection-is-used"
     title: "Require introspection_endpoint when introspection operations are invoked"
     standard_refs:
